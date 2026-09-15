@@ -8,10 +8,19 @@ namespace Bot_Detection_Service
         public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
-
+            builder.Services.AddSingleton<BotScorer>();
             builder.Services.AddControllers();
 
+            // Wide-open CORS for testing
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("DevTestPage", policy =>
+                    policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
+            });
+
             var app = builder.Build();
+
+            app.UseCors("DevTestPage");
 
             app.MapPost("/api/bot-check", (BotCheckRequest req, BotScorer scorer) =>
             {
