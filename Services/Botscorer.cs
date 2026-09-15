@@ -38,25 +38,55 @@ namespace Bot_Detection_Service.Services
             var reasons = new List<string>();
             double score = 0.0; // accumulate 0..1 contributions, then clamp
 
-            // --- Environment signals (strong, cheap) ---
-            if (f.Environment.Webdriver)
-            {
-                score += 0.5;
-                reasons.Add("navigator.webdriver flag is set");
-            }
+            score = CheckEnvironmentSignals(f, reasons, score);
+            score = CheckTimingSignals(f, reasons, score);
+            score = CheckMouseActivity(f, reasons, score);
+            score = CheckKeyboardActivity(f, reasons, score);
 
-            if (f.Environment.LanguagesCount == 0)
+            // --- Scroll signals ---
+            if (!f.Scroll.InsufficientData && f.Scroll.DeltaVariance < ZeroVarianceEpsilon && f.Scroll.SampleCount > 3)
             {
                 score += 0.05;
-                reasons.Add("no navigator.languages reported");
+                reasons.Add("scroll deltas are suspiciously uniform");
             }
 
-            if (f.Environment.HasPlugins == false)
+            score = Math.Clamp(score, 0.0, 1.0);
+
+            var verdict = score switch
             {
-                score += 0.03;
-                reasons.Add("no browser plugins reported");
+                >= 0.6 => Verdict.Bot,
+                >= 0.3 => Verdict.Suspicious,
+                _ => Verdict.Human,
+            };
+
+
+
+            return new ScoreResult { Score = score, Verdict = verdict, Reasons = reasons };
+        }
+
+        private static double CheckKeyboardActivity(BotFeatures f, List<string> reasons, double score)
+        {
+            // --- Keyboard signals ---
+            if (!f.Keyboard.InsufficientData)
+            {
+                if (f.Keyboard.DwellVariance < ZeroVarianceEpsilon && f.Keyboard.SampleCount > 3)
+                {
+                    score += 0.15;
+                    reasons.Add("keystroke dwell time is suspiciously uniform");
+                }
+
+                if (f.Keyboard.FlightVariance < ZeroVarianceEpsilon && f.Keyboard.SampleCount > 3)
+                {
+                    score += 0.1;
+                    reasons.Add("keystroke flight time is suspiciously uniform");
+                }
             }
 
+            return score;
+        }
+
+        private static double CheckTimingSignals(BotFeatures f, List<string> reasons, double score)
+        {
             // --- Timing signals ---
             if (f.TimeToFirstInteractionMs is double tti)
             {
@@ -78,6 +108,35 @@ namespace Bot_Detection_Service.Services
                 reasons.Add($"session/form completed in {f.SessionDurationMs:F0}ms");
             }
 
+            return score;
+        }
+
+        private static double CheckEnvironmentSignals(BotFeatures f, List<string> reasons, double score)
+        {
+            // --- Environment signals (strong, cheap) ---
+            if (f.Environment.Webdriver)
+            {
+                score += 0.5;
+                reasons.Add("navigator.webdriver flag is set");
+            }
+
+            if (f.Environment.LanguagesCount == 0)
+            {
+                score += 0.05;
+                reasons.Add("no navigator.languages reported");
+            }
+
+            if (f.Environment.HasPlugins == false)
+            {
+                score += 0.03;
+                reasons.Add("no browser plugins reported");
+            }
+
+            return score;
+        }
+
+        private static double CheckMouseActivity(BotFeatures f, List<string> reasons, double score)
+        {
             // --- Mouse signals ---
             if (f.Mouse.InsufficientData || f.Mouse.SampleCount < MinHumanMouseSamples)
             {
@@ -105,39 +164,7 @@ namespace Bot_Detection_Service.Services
                 }
             }
 
-            // --- Keyboard signals ---
-            if (!f.Keyboard.InsufficientData)
-            {
-                if (f.Keyboard.DwellVariance < ZeroVarianceEpsilon && f.Keyboard.SampleCount > 3)
-                {
-                    score += 0.15;
-                    reasons.Add("keystroke dwell time is suspiciously uniform");
-                }
-
-                if (f.Keyboard.FlightVariance < ZeroVarianceEpsilon && f.Keyboard.SampleCount > 3)
-                {
-                    score += 0.1;
-                    reasons.Add("keystroke flight time is suspiciously uniform");
-                }
-            }
-
-            // --- Scroll signals ---
-            if (!f.Scroll.InsufficientData && f.Scroll.DeltaVariance < ZeroVarianceEpsilon && f.Scroll.SampleCount > 3)
-            {
-                score += 0.05;
-                reasons.Add("scroll deltas are suspiciously uniform");
-            }
-
-            score = Math.Clamp(score, 0.0, 1.0);
-
-            var verdict = score switch
-            {
-                >= 0.6 => Verdict.Bot,
-                >= 0.3 => Verdict.Suspicious,
-                _ => Verdict.Human,
-            };
-
-            return new ScoreResult { Score = score, Verdict = verdict, Reasons = reasons };
+            return score;
         }
     }
 }
