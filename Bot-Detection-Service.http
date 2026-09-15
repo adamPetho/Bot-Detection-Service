@@ -1,0 +1,6 @@
+@Bot_Detection_Service_HostAddress = http://localhost:5120
+
+GET {{Bot_Detection_Service_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
