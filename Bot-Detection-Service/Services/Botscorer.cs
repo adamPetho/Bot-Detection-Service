@@ -42,7 +42,27 @@ namespace Bot_Detection_Service.Services
             score = CheckTimingSignals(f, reasons, score);
             score = CheckMouseActivity(f, reasons, score);
             score = CheckKeyboardActivity(f, reasons, score);
+            score = ScrollActivity(f, reasons, score);
 
+            score = Math.Clamp(score, 0.0, 1.0);
+
+            Verdict verdict = DetermineVerdict(score);
+
+            return new ScoreResult { Score = score, Verdict = verdict, Reasons = reasons };
+        }
+
+        public static Verdict DetermineVerdict(double score)
+        {
+            return score switch
+            {
+                >= 0.6 => Verdict.Bot,
+                >= 0.3 => Verdict.Suspicious,
+                _ => Verdict.Human,
+            };
+        }
+
+        public static double ScrollActivity(BotFeatures f, List<string> reasons, double score)
+        {
             // --- Scroll signals ---
             if (!f.Scroll.InsufficientData && f.Scroll.DeltaVariance < ZeroVarianceEpsilon && f.Scroll.SampleCount > 3)
             {
@@ -50,21 +70,10 @@ namespace Bot_Detection_Service.Services
                 reasons.Add("scroll deltas are suspiciously uniform");
             }
 
-            score = Math.Clamp(score, 0.0, 1.0);
-
-            var verdict = score switch
-            {
-                >= 0.6 => Verdict.Bot,
-                >= 0.3 => Verdict.Suspicious,
-                _ => Verdict.Human,
-            };
-
-
-
-            return new ScoreResult { Score = score, Verdict = verdict, Reasons = reasons };
+            return score;
         }
 
-        private static double CheckKeyboardActivity(BotFeatures f, List<string> reasons, double score)
+        public static double CheckKeyboardActivity(BotFeatures f, List<string> reasons, double score)
         {
             // --- Keyboard signals ---
             if (!f.Keyboard.InsufficientData)
@@ -85,7 +94,7 @@ namespace Bot_Detection_Service.Services
             return score;
         }
 
-        private static double CheckTimingSignals(BotFeatures f, List<string> reasons, double score)
+        public static double CheckTimingSignals(BotFeatures f, List<string> reasons, double score)
         {
             // --- Timing signals ---
             if (f.TimeToFirstInteractionMs is double tti)
@@ -111,7 +120,7 @@ namespace Bot_Detection_Service.Services
             return score;
         }
 
-        private static double CheckEnvironmentSignals(BotFeatures f, List<string> reasons, double score)
+        public static double CheckEnvironmentSignals(BotFeatures f, List<string> reasons, double score)
         {
             // --- Environment signals (strong, cheap) ---
             if (f.Environment.Webdriver)
@@ -135,7 +144,7 @@ namespace Bot_Detection_Service.Services
             return score;
         }
 
-        private static double CheckMouseActivity(BotFeatures f, List<string> reasons, double score)
+        public static double CheckMouseActivity(BotFeatures f, List<string> reasons, double score)
         {
             // --- Mouse signals ---
             if (f.Mouse.InsufficientData || f.Mouse.SampleCount < MinHumanMouseSamples)
