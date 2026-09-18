@@ -125,5 +125,62 @@ namespace Bot_Detection.Tests
             Assert.Equal(0.35, result.Score, precision: 3);
             Assert.Equal(2, result.Reasons.Count);
         }
+
+        [Fact]
+        public void Real_Human_Test_Values()
+        {
+            var features = new BotFeatures
+            {
+                SessionDurationMs = 21_460,
+                TimeToFirstInteractionMs = 779,
+                ClickCount = 2,
+                FocusOrderLength = 3,
+                Environment = new EnvironmentFeatures
+                {
+                    Webdriver = false,
+                    LanguagesCount = 2,
+                    HardwareConcurrency = 20,
+                    DeviceMemory = 16,
+                    HasPlugins = true,
+                    HasTouch = false,
+                    ScreenW = 1536,
+                    ScreenH = 864,
+                    InnerW = 1526,
+                    InnerH = 696,
+                    TimezoneOffset = -120
+                },
+                Mouse = new MouseFeatures
+                {
+                    SampleCount = 383,
+                    InsufficientData = false,
+                    MeanVelocity = 0.576,
+                    VelocityVariance = 0.26,
+                    DirectionChangeRate = 0.52,
+                    StraightLineRatio = 0.283
+                },
+                Keyboard = new KeyboardFeatures
+                {
+                    SampleCount = 39,
+                    InsufficientData = false,
+                    MeanDwellMs = 111.59,
+                    DwellVariance = 5880.633,
+                    MeanFlightMs = 264.83,
+                    FlightVariance = 232848.67,
+                },
+                Scroll = new ScrollFeatures
+                {
+                    SampleCount = 269,
+                    InsufficientData = false,
+                    MeanDelta = 3.4026,
+                    DeltaVariance = 4.73,
+                },
+            };
+
+            var result = _scorer.Score(features);
+
+            Assert.Equal(Verdict.Human, result.Verdict);
+            Assert.True(result.Score < 0.3, $"Expected score < 0.3, got {result.Score}");
+            Assert.Contains(result.Reasons, r => r.Contains("mouse velocity", StringComparison.OrdinalIgnoreCase));
+        }
     }
 }
