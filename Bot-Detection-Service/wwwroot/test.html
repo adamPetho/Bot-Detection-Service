@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Bot Detection</title>
+<title>Bot Detection — Manual Test Page</title>
 <style>
   :root {
     --bg: #0f1220;
@@ -142,7 +142,7 @@
   <div class="panel">
     <h2>API endpoint</h2>
     <label for="endpoint">POST target</label>
-    <input type="url" id="endpoint" value="http://localhost:5120/api/bot-check">
+    <input type="url" id="endpoint" value="http://localhost:5000/api/bot-check">
     <div class="hint">Adjust the port if your <code>dotnet run</code> output shows a different one.</div>
   </div>
 
@@ -171,6 +171,30 @@
     </div>
   </div>
 
+  <div class="panel">
+    <h2>Simulate request-pattern behavior</h2>
+    <div class="hint" style="margin-bottom:12px;">
+      This logs into the rolling window tracked by request-pattern-tracker.js
+      (persisted in localStorage across page loads). A real user views a
+      company page before downloading its document — try the paired buttons
+      for that, then compare against "Download only" or the rapid-scrape
+      simulation to see the score react.
+    </div>
+    <div class="stats-grid" style="margin-bottom:12px;">
+      <div class="stat"><div class="n" id="statReqCount">0</div><div class="l">Requests (window)</div></div>
+      <div class="stat"><div class="n" id="statReqUnique">0</div><div class="l">Unique resources</div></div>
+      <div class="stat"><div class="n" id="statReqTrail">–</div><div class="l">Browsing trail</div></div>
+      <div class="stat"><div class="n" id="statReqHoneypot">No</div><div class="l">Honeypot hit</div></div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <button id="btnViewAndDownload" style="background:#2a2f4a;">View company page, then download its document</button>
+      <button id="btnDownloadOnly" style="background:#2a2f4a;">Download only (no page view first)</button>
+      <button id="btnSimulateScrape" style="background:#2a2f4a;">Simulate rapid sequential scrape (20 requests)</button>
+      <button id="btnHitHoneypot" style="background:var(--bot);">Hit honeypot resource</button>
+      <button id="btnResetLog" style="background:#2a2f4a;">Reset request log</button>
+    </div>
+  </div>
+
   <button id="evaluateBtn">Evaluate Score</button>
 
   <div class="error-box" id="errorBox"></div>
@@ -191,9 +215,15 @@
 </div>
 
 <script src="telemetry-collector.js"></script>
+<script src="request-pattern-tracker.js"></script>
 <script>
   const collector = new BotTelemetry();
   collector.start();
+
+  // Small window (2 minutes) and a low sample floor purely so this is
+  // demonstrable by hand-clicking in a manual test session — in production
+  // you'd use something like 15–30 minutes and the library default of 5.
+  const tracker = new RequestPatternTracker({ windowMinutes: 2, minRequestsForAnalysis: 3 });
 
   // Live counter display so you can see telemetry accumulating in real time.
   setInterval(() => {
@@ -203,7 +233,50 @@
     document.getElementById('statClicks').textContent = collector.clickEvents.length;
     document.getElementById('statTime').textContent =
       ((performance.now() - collector.startTime) / 1000).toFixed(1) + 's';
+
+    const rp = tracker.computeFeatures();
+    document.getElementById('statReqCount').textContent = rp.requestCount;
+    document.getElementById('statReqUnique').textContent = rp.uniqueResourceCount;
+    document.getElementById('statReqTrail').textContent =
+      rp.insufficientData ? '–' : (rp.browsingTrailRatio * 100).toFixed(0) + '%';
+    document.getElementById('statReqHoneypot').textContent = rp.hitHoneypot ? 'YES' : 'No';
+    document.getElementById('statReqHoneypot').style.color = rp.hitHoneypot ? 'var(--bot)' : '';
   }, 250);
+
+  // --- Request-pattern simulation buttons -------------------------------
+  // A small pool of resource IDs so "view then download" and "sequential
+  // scrape" have something realistic to work with. Trailing numbers matter
+  // for the sequential-ID heuristic — see request-pattern-tracker.js.
+  function randomCompanyId() {
+    return 'company-' + (1000 + Math.floor(Math.random() * 50));
+  }
+
+  document.getElementById('btnViewAndDownload').addEventListener('click', () => {
+    const id = randomCompanyId();
+    tracker.logPageView(id);
+    setTimeout(() => tracker.logRequest(id), 150); // small realistic delay
+  });
+
+  document.getElementById('btnDownloadOnly').addEventListener('click', () => {
+    tracker.logRequest(randomCompanyId());
+  });
+
+  document.getElementById('btnSimulateScrape').addEventListener('click', () => {
+    // Sequential IDs, no page views, tight timing — the shape of a script
+    // walking through records by incrementing an ID.
+    const start = 2000 + Math.floor(Math.random() * 100);
+    for (let i = 0; i < 20; i++) {
+      tracker.logRequest('company-' + (start + i));
+    }
+  });
+
+  document.getElementById('btnHitHoneypot').addEventListener('click', () => {
+    tracker.logHoneypotHit('decoy-99981');
+  });
+
+  document.getElementById('btnResetLog').addEventListener('click', () => {
+    tracker.reset();
+  });
 
   const btn = document.getElementById('evaluateBtn');
   const resultBox = document.getElementById('result');
@@ -216,6 +289,7 @@
     resultBox.style.display = 'none';
 
     const features = collector.computeFeatures();
+    features.requestPattern = tracker.computeFeatures();
     const endpoint = document.getElementById('endpoint').value;
 
     try {
