@@ -23,7 +23,7 @@ namespace Bot_Detection_Service
 
             app.UseCors("DevTestPage");
 
-            app.MapPost("/api/bot-check", (BotCheckRequest req, BotScorer scorer) =>
+            app.MapPost("/api/score", (BotCheckRequest req, BotScorer scorer) =>
             {
                 var result = scorer.Score(req.Features);
 
@@ -31,10 +31,13 @@ namespace Bot_Detection_Service
                 {
                     req.SessionId,
                     result.Score,
-                    Verdict = result.Verdict.ToString(),
+                    Action = result.Action.ToString(),
                     result.Reasons,
                 });
             });
+
+            // Liveness probe for the container orchestrator. Kept trivial on purpose.
+            app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
             app.Run();
         }
