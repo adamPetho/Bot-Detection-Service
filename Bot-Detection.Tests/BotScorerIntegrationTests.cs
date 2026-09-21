@@ -127,6 +127,65 @@ namespace Bot_Detection.Tests
         }
 
         [Fact]
+        public void HoneypotHitWithOtherwiseCleanBehavior_StillScoresAsBot()
+        {
+            var features = new BotFeatures
+            {
+                SessionDurationMs = 45_000,
+                TimeToFirstInteractionMs = 1_200,
+                ClickCount = 3,
+                FocusOrderLength = 2,
+                Environment = new EnvironmentFeatures
+                {
+                    Webdriver = false,
+                    LanguagesCount = 2,
+                    HasPlugins = true,
+                    HasTouch = false,
+                    InnerW = 1440,
+                    InnerH = 900,
+                    TimezoneOffset = -60,
+                },
+                Mouse = new MouseFeatures
+                {
+                    SampleCount = 240,
+                    InsufficientData = false,
+                    MeanVelocity = 0.8,
+                    VelocityVariance = 1.4,
+                    DirectionChangeRate = 0.22,
+                    StraightLineRatio = 0.10,
+                },
+                Keyboard = new KeyboardFeatures
+                {
+                    SampleCount = 18,
+                    InsufficientData = false,
+                    MeanDwellMs = 95,
+                    DwellVariance = 12.3,
+                    MeanFlightMs = 140,
+                    FlightVariance = 20.7,
+                },
+                Scroll = new ScrollFeatures
+                {
+                    SampleCount = 9,
+                    InsufficientData = false,
+                    MeanDelta = 80,
+                    DeltaVariance = 15.6,
+                },
+                RequestPattern = new RequestPatternFeatures
+                {
+                    InsufficientData = true, // too few requests yet for the other pattern checks...
+                    HitHoneypot = true,      // ...but this one hit is enough on its own
+                },
+            };
+
+            var result = _scorer.Score(features);
+
+            Assert.Equal(Verdict.Bot, result.Verdict);
+            Assert.Equal(0.6, result.Score, precision: 3);
+            Assert.Single(result.Reasons);
+            Assert.Contains(result.Reasons, r => r.Contains("honeypot", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Fact]
         public void Real_Human_Test_Values()
         {
             var features = new BotFeatures
