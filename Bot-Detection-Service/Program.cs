@@ -11,7 +11,8 @@ namespace Bot_Detection_Service
             builder.Services.AddSingleton<BotScorer>();
             builder.Services.AddControllers();
 
-            // Wide-open CORS for testing
+            // Wide-open CORS for testing.
+            // Set up proper CORS on production.
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy("DevTestPage", policy =>
