@@ -2,17 +2,17 @@
 
 namespace Bot_Detection_Service.Services
 {
-    public enum Verdict
+    public enum RiskAction
     {
-        Human,
-        Suspicious,
-        Bot,
+        Allow,
+        Challenge,
+        Block,
     }
 
     public sealed class ScoreResult
     {
-        public double Score { get; init; }              // 0.0 (human) - 1.0 (bot)
-        public Verdict Verdict { get; init; }
+        public double Score { get; init; }              // 0.0 (allow) >= 0.3 (challenge) =< 1.0 (block)
+        public RiskAction Action { get; init; }
         public IReadOnlyList<string> Reasons { get; init; } = Array.Empty<string>();
     }
 
@@ -55,18 +55,18 @@ namespace Bot_Detection_Service.Services
 
             score = Math.Clamp(score, 0.0, 1.0);
 
-            Verdict verdict = DetermineVerdict(score);
+            RiskAction action = DetermineAction(score);
 
-            return new ScoreResult { Score = score, Verdict = verdict, Reasons = reasons };
+            return new ScoreResult { Score = score, Action = action, Reasons = reasons };
         }
 
-        public static Verdict DetermineVerdict(double score)
+        public static RiskAction DetermineAction(double score)
         {
             return score switch
             {
-                >= 0.6 => Verdict.Bot,
-                >= 0.3 => Verdict.Suspicious,
-                _ => Verdict.Human,
+                >= 0.6 => RiskAction.Block,
+                >= 0.3 => RiskAction.Challenge,
+                _ => RiskAction.Allow,
             };
         }
 
