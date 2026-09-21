@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registry Demo — Directory</title>
+<link rel="stylesheet" href="shared/styles.css">
+</head>
+<body>
+<nav class="topbar">
+  <span class="brand">Company Registry</span>
+  <a href="index.html">Home</a>
+  <a href="directory.html">Directory</a>
+  <span class="spacer"></span>
+  <a href="scenario-lab.html">Scenario Lab</a>
+</nav>
+
+<div class="container">
+  <h1>Company Directory</h1>
+  <p class="lead">
+    Click a company to open its page. That page view is logged against the
+    company's ID — so when you later download its document, the detector can
+    see the download had a browsing trail behind it.
+  </p>
+
+  <div class="company-list" id="list"></div>
+</div>
+
+<script src="telemetry-collector.js"></script>
+<script src="request-pattern-tracker.js"></script>
+<script src="shared/companies.js"></script>
+<script src="shared/demo-harness.js"></script>
+<script>
+  // Render the directory from the shared dataset. Each row links to the
+  // detail page with the company id in the query string — normal navigation.
+  const list = document.getElementById('list');
+  for (const c of window.COMPANIES) {
+    const row = document.createElement('div');
+    row.className = 'card';
+    row.innerHTML = `
+      <div>
+        <h3><a href="company.html?id=${encodeURIComponent(c.id)}">${c.name}</a></h3>
+        <div class="meta">${c.sector} · ${c.city} · ${c.employees} employees · ${c.id}</div>
+      </div>
+      <a class="btn secondary" href="company.html?id=${encodeURIComponent(c.id)}">Open</a>`;
+    list.appendChild(row);
+  }
+</script>
+</body>
+</html>
