@@ -32,6 +32,14 @@ namespace Bot_Detection_Service.Services
         private const double StraightLineRatioBotThreshold = 0.85;
         private const double DirectionChangeRateHumanFloor = 0.05;
         private const double ZeroVarianceEpsilon = 0.5;
+        private const int MinRequestsForTimingCheck = 5;
+        private const int HighRequestCountThreshold = 50;
+        private const int RequestBreadthThreshold = 10;         // distinct resources touched
+        private const double LowRepeatFloor = 1.2;               // requests per unique resource
+        private const double RequestIntervalVarianceEpsilonMs2 = 250_000; // ~500ms stddev
+        private const double HighSequentialIdRatioThreshold = 0.6;
+        private const double LowBrowsingTrailFloor = 0.2;
+        private const double HoneypotScoreAdd = 0.6;   // near-certain on its own
 
         public ScoreResult Score(BotFeatures f)
         {
@@ -43,6 +51,7 @@ namespace Bot_Detection_Service.Services
             score = CheckMouseActivity(f, reasons, score);
             score = CheckKeyboardActivity(f, reasons, score);
             score = ScrollActivity(f, reasons, score);
+            score = CheckRequestPatternSignals(f, reasons, score);
 
             score = Math.Clamp(score, 0.0, 1.0);
 
@@ -59,6 +68,61 @@ namespace Bot_Detection_Service.Services
                 >= 0.3 => Verdict.Suspicious,
                 _ => Verdict.Human,
             };
+        }
+
+        public static double CheckRequestPatternSignals(BotFeatures f, List<string> reasons, double score)
+        {
+            var rp = f.RequestPattern;
+            if (rp is null)
+            {
+                return score;
+            }
+
+            // Checked before the InsufficientData gate below: a single honeypot
+            // hit is meaningful on its own, even from a session with too little
+            // overall volume for the pattern-based checks to say anything yet.
+            if (rp.HitHoneypot)
+            {
+                score += HoneypotScoreAdd;
+                reasons.Add("accessed a honeypot resource that is never linked from the real UI");
+            }
+
+            if (rp.InsufficientData)
+            {
+                return score;
+            }
+
+            if (rp.RequestCount >= HighRequestCountThreshold)
+            {
+                score += 0.15;
+                reasons.Add($"{rp.RequestCount} requests in the last {rp.WindowMinutes:F0} minutes (high volume)");
+            }
+
+            if (rp.UniqueResourceCount >= RequestBreadthThreshold && rp.RequestsPerUniqueResource <= LowRepeatFloor)
+            {
+                score += 0.2;
+                reasons.Add($"touched {rp.UniqueResourceCount} distinct resources with almost no repeat visits (single-pass sweep)");
+            }
+
+            if (rp.RequestCount > MinRequestsForTimingCheck && rp.IntervalVarianceMs < RequestIntervalVarianceEpsilonMs2)
+            {
+                score += 0.15;
+                reasons.Add("requests are suspiciously evenly spaced in time");
+            }
+
+            if (rp.SequentialIdRatio >= HighSequentialIdRatioThreshold)
+            {
+                score += 0.2;
+                reasons.Add($"{rp.SequentialIdRatio:P0} of requested resource IDs are sequential (enumeration signature)");
+            }
+
+            if (rp.UniqueResourceCount >= RequestBreadthThreshold && rp.BrowsingTrailRatio <= LowBrowsingTrailFloor)
+            {
+                score += 0.15;
+                reasons.Add("downloads with almost no preceding page views (skipping the normal browsing trail)");
+            }
+
+            return score;
         }
 
         public static double ScrollActivity(BotFeatures f, List<string> reasons, double score)
