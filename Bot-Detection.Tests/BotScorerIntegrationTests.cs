@@ -36,7 +36,7 @@ namespace Bot_Detection.Tests
 
             var result = _scorer.Score(features);
 
-            Assert.Equal(Verdict.Bot, result.Verdict);
+            Assert.Equal(RiskAction.Block, result.Action);
             Assert.True(result.Score >= 0.6, $"Expected score >= 0.6, got {result.Score}");
             Assert.Contains(result.Reasons, r => r.Contains("webdriver", StringComparison.OrdinalIgnoreCase));
             Assert.Contains(result.Reasons, r => r.Contains("mouse", StringComparison.OrdinalIgnoreCase));
@@ -90,7 +90,7 @@ namespace Bot_Detection.Tests
 
             var result = _scorer.Score(features);
 
-            Assert.Equal(Verdict.Human, result.Verdict);
+            Assert.Equal(RiskAction.Allow, result.Action);
             Assert.True(result.Score < 0.3, $"Expected score < 0.3, got {result.Score}");
             Assert.Empty(result.Reasons);
         }
@@ -121,7 +121,7 @@ namespace Bot_Detection.Tests
 
             var result = _scorer.Score(features);
 
-            Assert.Equal(Verdict.Suspicious, result.Verdict);
+            Assert.Equal(RiskAction.Challenge, result.Action);
             Assert.Equal(0.35, result.Score, precision: 3);
             Assert.Equal(2, result.Reasons.Count);
         }
@@ -179,7 +179,7 @@ namespace Bot_Detection.Tests
 
             var result = _scorer.Score(features);
 
-            Assert.Equal(Verdict.Bot, result.Verdict);
+            Assert.Equal(RiskAction.Block, result.Action);
             Assert.Equal(0.6, result.Score, precision: 3);
             Assert.Single(result.Reasons);
             Assert.Contains(result.Reasons, r => r.Contains("honeypot", StringComparison.OrdinalIgnoreCase));
@@ -237,7 +237,7 @@ namespace Bot_Detection.Tests
 
             var result = _scorer.Score(features);
 
-            Assert.Equal(Verdict.Human, result.Verdict);
+            Assert.Equal(RiskAction.Allow, result.Action);
             Assert.True(result.Score < 0.3, $"Expected score < 0.3, got {result.Score}");
             Assert.Contains(result.Reasons, r => r.Contains("mouse velocity", StringComparison.OrdinalIgnoreCase));
         }

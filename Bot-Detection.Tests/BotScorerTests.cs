@@ -38,7 +38,7 @@ namespace Bot_Detection.Tests
             var scorer = new BotScorer();
             var result = scorer.Score(features);
 
-            Assert.Equal(Verdict.Bot, result.Verdict);
+            Assert.Equal(RiskAction.Block, result.Action);
             Assert.True(result.Score >= 0.6, $"Expected score >= 0.6, got {result.Score}");
             Assert.Contains(result.Reasons, r => r.Contains("webdriver", StringComparison.OrdinalIgnoreCase));
             Assert.Contains(result.Reasons, r => r.Contains("mouse", StringComparison.OrdinalIgnoreCase));
