@@ -31,7 +31,7 @@
 (function () {
   const SESSION_KEY = 'botdetect_session_id';
   const ENDPOINT_KEY = 'botdetect_endpoint';
-  const DEFAULT_ENDPOINT = 'http://localhost:8080/api/score';
+  const DEFAULT_ENDPOINT = 'http://localhost:5120/api/score';
 
   function getSessionId() {
     try {
