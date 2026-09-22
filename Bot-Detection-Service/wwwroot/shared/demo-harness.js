@@ -31,7 +31,7 @@
 (function () {
   const SESSION_KEY = 'botdetect_session_id';
   const ENDPOINT_KEY = 'botdetect_endpoint';
-  const DEFAULT_ENDPOINT = 'http://localhost:5120/api/bot-check';
+  const DEFAULT_ENDPOINT = 'http://localhost:8080/api/score';
 
   function getSessionId() {
     try {
@@ -130,7 +130,7 @@
       if (!res.ok) throw new Error(`server responded ${res.status} ${res.statusText}`);
       const data = await res.json();
 
-      const verdict = data.verdict ?? data.Verdict;
+      const verdict = data.action ?? data.Action;
       const score = data.score ?? data.Score;
       verdictEl.textContent = `${verdict} · ${score.toFixed(3)}`;
       verdictEl.className = 'rp-verdict v-' + verdict;
