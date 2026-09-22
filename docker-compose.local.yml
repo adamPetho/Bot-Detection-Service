@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  botdetection:
+    build:
+      context: .
+      dockerfile: Dockerfile.riskscorer
+    image: botdetection:test
+    container_name: botdetection
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+    restart: unless-stopped
