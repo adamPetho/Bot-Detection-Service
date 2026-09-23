@@ -9,7 +9,6 @@ namespace Bot_Detection_Service
         {
             var builder = WebApplication.CreateBuilder(args);
             builder.Services.AddSingleton<RiskCalculator>();
-            builder.Services.AddControllers();
 
             builder.Services.AddProblemDetails();
 
@@ -44,11 +43,6 @@ namespace Bot_Detection_Service
             })
             .AddEndpointFilter(async (ctx, next) =>
             {
-                // Runs after model binding, before the handler. A malformed or empty
-                // JSON body is already rejected with a 400 by the framework before this
-                // point; here we catch the structurally-valid-JSON-but-wrong-shape cases
-                // (missing sessionId, null features, null feature sub-objects) that would
-                // otherwise null-ref inside the scorer.
                 var req = ctx.GetArgument<ScoreRequest?>(0);
                 var errors = ScoreRequestValidator.Validate(req);
                 if (errors.Count > 0)
@@ -58,6 +52,8 @@ namespace Bot_Detection_Service
 
                 return await next(ctx);
             });
+
+            app.UseExceptionHandler();
 
             // Liveness probe for the container orchestrator. Kept trivial on purpose.
             app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
