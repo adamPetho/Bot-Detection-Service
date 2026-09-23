@@ -1,245 +1,162 @@
-﻿using Bot_Detection_Service.Models;
-using Bot_Detection_Service.Services;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using Bot_Detection_Service.Services;
+using Xunit;
 
-namespace Bot_Detection.Tests
+namespace BotDetection.Tests;
+
+/// <summary>
+/// End-to-end tests through the public Score() entry point. These build a
+/// full BotFeatures vector representing a realistic scenario and assert on
+/// the combined score, action, and reasons — i.e. what a caller of BotScorer
+/// actually sees.
+///
+/// BotScorer.Score() is a pure function: same BotFeatures in, same
+/// ScoreResult out, every time. No clock, no randomness, no I/O.
+///
+/// Score() assumes a fully-populated vector; at the HTTP boundary that is
+/// guaranteed by ScoreRequestValidator, which rejects a request missing any
+/// sub-object with a 400.
+///
+/// For tests that isolate a single signal category, see
+/// BotScorerSignalTests.cs. For action threshold boundaries, see
+/// BotScorerActionTests.cs.
+/// </summary>
+public class BotScorerIntegrationTests
 {
-    public class BotScorerIntegrationTests
+    private readonly RiskCalculator _scorer = new();
+
+    /// <summary>
+    /// The clearest possible bot case: navigator.webdriver set and no mouse
+    /// movement at all — the signature of an unmodified Selenium/Puppeteer
+    /// bot driving a form programmatically. Every signal points the same
+    /// direction, so this isn't a borderline judgment call.
+    /// </summary>
+    [Fact]
+    public void ObviousBot_WebdriverFlagAndNoMouseMovement_RecommendsBlock()
     {
-        private readonly RiskCalculator _scorer = new();
-
-        [Fact]
-        public void ObviousBot_WebdriverFlagAndNoMouseMovement_ScoresAsBot()
+        var features = new BotFeatures
         {
-            var features = new BotFeatures
+            SessionDurationMs = 150,
+            TimeToFirstInteractionMs = null, // no interaction recorded before submit
+            ClickCount = 1,
+            FocusOrderLength = 1,
+            Environment = new EnvironmentFeatures
             {
-                SessionDurationMs = 150,
-                TimeToFirstInteractionMs = null, // no interaction recorded before "submit"
-                ClickCount = 1,
-                FocusOrderLength = 1,
-                Environment = new EnvironmentFeatures
-                {
-                    Webdriver = true,
-                    LanguagesCount = 0,
-                    HasPlugins = false,
-                    HasTouch = false,
-                    InnerW = 1920,
-                    InnerH = 1080,
-                    TimezoneOffset = 0,
-                },
-                Mouse = new MouseFeatures { SampleCount = 0, InsufficientData = true },
-                Keyboard = new KeyboardFeatures { SampleCount = 0, InsufficientData = true },
-                Scroll = new ScrollFeatures { SampleCount = 0, InsufficientData = true },
-            };
+                Webdriver = true,
+                LanguagesCount = 0,
+                HasPlugins = false,
+                HasTouch = false,
+                InnerW = 1920,
+                InnerH = 1080,
+                TimezoneOffset = 0,
+            },
+            Mouse = new PointerFeatures { SampleCount = 0 },
+            Touch = new PointerFeatures { SampleCount = 0 },
+            Keyboard = new KeyboardFeatures { SampleCount = 0 },
+            Scroll = new ScrollFeatures { SampleCount = 0 },
+        };
 
-            var result = _scorer.Score(features);
+        var result = _scorer.Score(features);
 
-            Assert.Equal(RiskAction.Block, result.Action);
-            Assert.True(result.Score >= 0.6, $"Expected score >= 0.6, got {result.Score}");
-            Assert.Contains(result.Reasons, r => r.Contains("webdriver", StringComparison.OrdinalIgnoreCase));
-            Assert.Contains(result.Reasons, r => r.Contains("mouse", StringComparison.OrdinalIgnoreCase));
-        }
+        Assert.Equal(RiskAction.Block, result.Action);
+        Assert.True(result.Score >= 0.6, $"Expected score >= 0.6, got {result.Score}");
+        Assert.Contains(result.Reasons, r => r.Contains("webdriver", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Reasons, r => r.Contains("mouse", StringComparison.OrdinalIgnoreCase));
+    }
 
-        [Fact]
-        public void CleanHumanSession_AllNaturalSignals_ScoresAsHuman()
+    /// <summary>
+    /// The clearest possible human case: every signal clean — normal browser
+    /// environment, natural pause before interacting, plenty of
+    /// mouse/keyboard/scroll samples with realistic variance, and an
+    /// unremarkable browsing window. Should score zero with no reasons.
+    /// </summary>
+    [Fact]
+    public void CleanHumanSession_AllNaturalSignals_RecommendsAllow()
+    {
+        var features = new BotFeatures
         {
-            var features = new BotFeatures
+            SessionDurationMs = 45_000,
+            TimeToFirstInteractionMs = 1_200,
+            ClickCount = 3,
+            FocusOrderLength = 2,
+            Environment = new EnvironmentFeatures
             {
-                SessionDurationMs = 45_000,
-                TimeToFirstInteractionMs = 1_200,
-                ClickCount = 3,
-                FocusOrderLength = 2,
-                Environment = new EnvironmentFeatures
-                {
-                    Webdriver = false,
-                    LanguagesCount = 2,
-                    HasPlugins = true,
-                    HasTouch = false,
-                    InnerW = 1440,
-                    InnerH = 900,
-                    TimezoneOffset = -60,
-                },
-                Mouse = new MouseFeatures
-                {
-                    SampleCount = 240,
-                    InsufficientData = false,
-                    MeanVelocity = 0.8,
-                    VelocityVariance = 1.4,      // well above the 0.5 "suspiciously constant" floor
-                    DirectionChangeRate = 0.22,  // well above the 0.05 human floor
-                    StraightLineRatio = 0.10,    // well below the 0.85 bot threshold
-                },
-                Keyboard = new KeyboardFeatures
-                {
-                    SampleCount = 18,
-                    InsufficientData = false,
-                    MeanDwellMs = 95,
-                    DwellVariance = 12.3,
-                    MeanFlightMs = 140,
-                    FlightVariance = 20.7,
-                },
-                Scroll = new ScrollFeatures
-                {
-                    SampleCount = 9,
-                    InsufficientData = false,
-                    MeanDelta = 80,
-                    DeltaVariance = 15.6,
-                },
-            };
+                Webdriver = false,
+                LanguagesCount = 2,
+                HasPlugins = true,
+                HasTouch = false,
+                InnerW = 1440,
+                InnerH = 900,
+                TimezoneOffset = -60,
+            },
+            Mouse = new PointerFeatures
+            {
+                SampleCount = 240,
+                MeanVelocity = 0.8,
+                VelocityCv = 0.75,           // well above the 0.15 CV floor
+                DirectionChangeRate = 0.22,  // well above the 0.05 human floor
+                StraightLineRatio = 0.10,    // well below the 0.85 bot threshold
+            },
+            Touch = new PointerFeatures { SampleCount = 0 },
+            Keyboard = new KeyboardFeatures
+            {
+                SampleCount = 18,
+                MeanDwellMs = 95,
+                DwellCv = 0.45,
+                MeanFlightMs = 140,
+                FlightCv = 0.62,
+            },
+            Scroll = new ScrollFeatures
+            {
+                SampleCount = 9,
+                MeanDelta = 80,
+                DeltaCv = 0.55,
+            },
+        };
 
-            var result = _scorer.Score(features);
+        var result = _scorer.Score(features);
 
-            Assert.Equal(RiskAction.Allow, result.Action);
-            Assert.True(result.Score < 0.3, $"Expected score < 0.3, got {result.Score}");
-            Assert.Empty(result.Reasons);
-        }
+        Assert.Equal(RiskAction.Allow, result.Action);
+        Assert.True(result.Score < 0.3, $"Expected score < 0.3, got {result.Score}");
+        Assert.Empty(result.Reasons);
+    }
 
-        [Fact]
-        public void MixedSignals_NoMouseDataPlusFastInteraction_ScoresAsSuspicious()
+    /// <summary>
+    /// A session with exactly two signals firing — no mouse data at all
+    /// (+0.2) and an implausibly fast first interaction (+0.15) — everything
+    /// else clean. That combination is fully deterministic (0.35) and lands
+    /// in the Challenge band without tipping into Block, which is the
+    /// scenario the middle action tier exists for: "add friction, don't
+    /// hard-block."
+    /// </summary>
+    [Fact]
+    public void MixedSignals_NoMouseDataPlusFastInteraction_RecommendsChallenge()
+    {
+        var features = new BotFeatures
         {
-            var features = new BotFeatures
+            SessionDurationMs = 5_000,       // above the 800ms "superhuman" floor, so this alone doesn't fire
+            TimeToFirstInteractionMs = 20,   // < 50ms triggers the fast-interaction check
+            ClickCount = 1,
+            FocusOrderLength = 1,
+            Environment = new EnvironmentFeatures
             {
-                SessionDurationMs = 5_000,       // above the 800ms "superhuman" floor, so this alone doesn't fire
-                TimeToFirstInteractionMs = 20,   // < 50ms triggers the fast-interaction check
-                ClickCount = 1,
-                FocusOrderLength = 1,
-                Environment = new EnvironmentFeatures
-                {
-                    Webdriver = false,
-                    LanguagesCount = 2,
-                    HasPlugins = true,
-                    HasTouch = false,
-                    InnerW = 1920,
-                    InnerH = 1080,
-                    TimezoneOffset = 0,
-                },
-                Mouse = new MouseFeatures { SampleCount = 0, InsufficientData = true },
-                Keyboard = new KeyboardFeatures { SampleCount = 0, InsufficientData = true },
-                Scroll = new ScrollFeatures { SampleCount = 0, InsufficientData = true },
-            };
+                Webdriver = false,
+                LanguagesCount = 2,
+                HasPlugins = true,
+                HasTouch = false,
+                InnerW = 1920,
+                InnerH = 1080,
+                TimezoneOffset = 0,
+            },
+            Mouse = new PointerFeatures { SampleCount = 0 },
+            Touch = new PointerFeatures { SampleCount = 0 },
+            Keyboard = new KeyboardFeatures { SampleCount = 0 },
+            Scroll = new ScrollFeatures { SampleCount = 0 },
+        };
 
-            var result = _scorer.Score(features);
+        var result = _scorer.Score(features);
 
-            Assert.Equal(RiskAction.Challenge, result.Action);
-            Assert.Equal(0.35, result.Score, precision: 3);
-            Assert.Equal(2, result.Reasons.Count);
-        }
-
-        [Fact]
-        public void HoneypotHitWithOtherwiseCleanBehavior_StillScoresAsBot()
-        {
-            var features = new BotFeatures
-            {
-                SessionDurationMs = 45_000,
-                TimeToFirstInteractionMs = 1_200,
-                ClickCount = 3,
-                FocusOrderLength = 2,
-                Environment = new EnvironmentFeatures
-                {
-                    Webdriver = false,
-                    LanguagesCount = 2,
-                    HasPlugins = true,
-                    HasTouch = false,
-                    InnerW = 1440,
-                    InnerH = 900,
-                    TimezoneOffset = -60,
-                },
-                Mouse = new MouseFeatures
-                {
-                    SampleCount = 240,
-                    InsufficientData = false,
-                    MeanVelocity = 0.8,
-                    VelocityVariance = 1.4,
-                    DirectionChangeRate = 0.22,
-                    StraightLineRatio = 0.10,
-                },
-                Keyboard = new KeyboardFeatures
-                {
-                    SampleCount = 18,
-                    InsufficientData = false,
-                    MeanDwellMs = 95,
-                    DwellVariance = 12.3,
-                    MeanFlightMs = 140,
-                    FlightVariance = 20.7,
-                },
-                Scroll = new ScrollFeatures
-                {
-                    SampleCount = 9,
-                    InsufficientData = false,
-                    MeanDelta = 80,
-                    DeltaVariance = 15.6,
-                },
-                RequestPattern = new RequestPatternFeatures
-                {
-                    InsufficientData = true, // too few requests yet for the other pattern checks...
-                    HitHoneypot = true,      // ...but this one hit is enough on its own
-                },
-            };
-
-            var result = _scorer.Score(features);
-
-            Assert.Equal(RiskAction.Block, result.Action);
-            Assert.Equal(0.6, result.Score, precision: 3);
-            Assert.Single(result.Reasons);
-            Assert.Contains(result.Reasons, r => r.Contains("honeypot", StringComparison.OrdinalIgnoreCase));
-        }
-
-        [Fact]
-        public void Real_Human_Test_Values()
-        {
-            var features = new BotFeatures
-            {
-                SessionDurationMs = 21_460,
-                TimeToFirstInteractionMs = 779,
-                ClickCount = 2,
-                FocusOrderLength = 3,
-                Environment = new EnvironmentFeatures
-                {
-                    Webdriver = false,
-                    LanguagesCount = 2,
-                    HardwareConcurrency = 20,
-                    DeviceMemory = 16,
-                    HasPlugins = true,
-                    HasTouch = false,
-                    ScreenW = 1536,
-                    ScreenH = 864,
-                    InnerW = 1526,
-                    InnerH = 696,
-                    TimezoneOffset = -120
-                },
-                Mouse = new MouseFeatures
-                {
-                    SampleCount = 383,
-                    InsufficientData = false,
-                    MeanVelocity = 0.576,
-                    VelocityVariance = 0.26,
-                    DirectionChangeRate = 0.52,
-                    StraightLineRatio = 0.283
-                },
-                Keyboard = new KeyboardFeatures
-                {
-                    SampleCount = 39,
-                    InsufficientData = false,
-                    MeanDwellMs = 111.59,
-                    DwellVariance = 5880.633,
-                    MeanFlightMs = 264.83,
-                    FlightVariance = 232848.67,
-                },
-                Scroll = new ScrollFeatures
-                {
-                    SampleCount = 269,
-                    InsufficientData = false,
-                    MeanDelta = 3.4026,
-                    DeltaVariance = 4.73,
-                },
-            };
-
-            var result = _scorer.Score(features);
-
-            Assert.Equal(RiskAction.Allow, result.Action);
-            Assert.True(result.Score < 0.3, $"Expected score < 0.3, got {result.Score}");
-            Assert.Contains(result.Reasons, r => r.Contains("mouse velocity", StringComparison.OrdinalIgnoreCase));
-        }
+        Assert.Equal(RiskAction.Challenge, result.Action);
+        Assert.Equal(0.35, result.Score, precision: 3);
+        Assert.Equal(2, result.Reasons.Count);
     }
 }

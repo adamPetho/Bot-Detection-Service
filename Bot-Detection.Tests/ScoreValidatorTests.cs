@@ -1,6 +1,5 @@
 ﻿using Bot_Detection_Service;
-using Bot_Detection_Service.Models;
-using Bot_Detection_Service.Validators;
+using Xunit;
 
 namespace BotDetection.Tests;
 
@@ -8,18 +7,18 @@ namespace BotDetection.Tests;
 /// Unit tests for the structural request validation that guards
 /// POST /api/score. Like BotScorer, ScoreRequestValidator.Validate is a pure
 /// function (request in, error dictionary out), so it's tested directly here
-/// without the web host; the HTTP wiring (that a 400 actually comes back) is
-/// covered separately by the endpoint-layer tests.
+/// without the web host.
 /// </summary>
 public class ScoreRequestValidatorTests
 {
-    // A fully-populated, valid request other tests mutate one field of.
+    // A fully-populated, valid request that other tests mutate one field of.
     private static ScoreRequest ValidRequest() => new(
         SessionId: "session-abc",
         Features: new BotFeatures
         {
             Environment = new EnvironmentFeatures(),
-            Mouse = new MouseFeatures(),
+            Mouse = new PointerFeatures(),
+            Touch = new PointerFeatures(),
             Keyboard = new KeyboardFeatures(),
             Scroll = new ScrollFeatures(),
         });
@@ -28,17 +27,6 @@ public class ScoreRequestValidatorTests
     public void Validate_FullyValidRequest_HasNoErrors()
     {
         var errors = ScoreRequestValidator.Validate(ValidRequest());
-
-        Assert.Empty(errors);
-    }
-
-    [Fact]
-    public void Validate_NullRequestPattern_IsStillValid()
-    {
-        // RequestPattern is optional by design — its absence must not error.
-        var req = ValidRequest() with { Features = new BotFeatures { RequestPattern = null } };
-
-        var errors = ScoreRequestValidator.Validate(req);
 
         Assert.Empty(errors);
     }
@@ -78,16 +66,6 @@ public class ScoreRequestValidatorTests
     }
 
     [Fact]
-    public void Validate_NullClientId_IsAllowed()
-    {
-        var req = ValidRequest();
-
-        var errors = ScoreRequestValidator.Validate(req);
-
-        Assert.Empty(errors);
-    }
-
-    [Fact]
     public void Validate_NullFeatures_ReportsFeaturesError()
     {
         var req = ValidRequest() with { Features = null! };
@@ -97,26 +75,31 @@ public class ScoreRequestValidatorTests
         Assert.True(errors.ContainsKey("features"));
     }
 
-    [Fact]
-    public void Validate_ExplicitNullSubObject_ReportsThatSubObject()
+    [Theory]
+    [InlineData("features.environment")]
+    [InlineData("features.mouse")]
+    [InlineData("features.touch")]
+    [InlineData("features.keyboard")]
+    [InlineData("features.scroll")]
+    public void Validate_MissingSubObject_ReportsThatSubObject(string expectedKey)
     {
-        // The scorer dereferences each sub-object; an explicit JSON null
-        // (which System.Text.Json binds despite the non-null annotation) must
-        // be caught here rather than null-ref'ing inside Score().
-        var req = ValidRequest() with
+        // Every sub-object is required. System.Text.Json binds an explicit
+        // JSON null despite the non-null annotation, and an omitted field
+        // binds null too (the models seed `null!`, not `new()`), so both
+        // shapes land here rather than silently scoring as zero risk.
+        var features = new BotFeatures
         {
-            Features = new BotFeatures
-            {
-                Environment = null!,
-                Mouse = new MouseFeatures(),
-                Keyboard = new KeyboardFeatures(),
-                Scroll = new ScrollFeatures(),
-            },
+            Environment = expectedKey == "features.environment" ? null! : new EnvironmentFeatures(),
+            Mouse = expectedKey == "features.mouse" ? null! : new PointerFeatures(),
+            Touch = expectedKey == "features.touch" ? null! : new PointerFeatures(),
+            Keyboard = expectedKey == "features.keyboard" ? null! : new KeyboardFeatures(),
+            Scroll = expectedKey == "features.scroll" ? null! : new ScrollFeatures(),
         };
+        var req = ValidRequest() with { Features = features };
 
         var errors = ScoreRequestValidator.Validate(req);
 
-        Assert.True(errors.ContainsKey("features.environment"));
-        Assert.False(errors.ContainsKey("features.mouse"));
+        Assert.True(errors.ContainsKey(expectedKey));
+        Assert.Single(errors); // only the one we nulled out
     }
 }

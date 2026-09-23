@@ -1,8 +1,19 @@
-﻿using Bot_Detection_Service.Models;
-using Bot_Detection_Service.Services;
+﻿using Bot_Detection_Service.Services;
+using Xunit;
 
-namespace Bot_Detection.Tests;
-public class BotScorerSignalTests
+namespace BotDetection.Tests;
+
+/// <summary>
+/// Isolated tests for each Check* signal method on RiskCalculator. These call the
+/// internal static methods directly (exposed via [InternalsVisibleTo] in
+/// BotDetection/AssemblyInfo.cs) so each signal category can be verified on
+/// its own, without building a full feature vector or worrying about other
+/// signals interfering.
+///
+/// Each test starts from a running score of 0.0 and an empty reasons list,
+/// mirroring how Score() chains these calls.
+/// </summary>
+public class RiskCalculatorSignalTests
 {
     // --- Environment --------------------------------------------------
 
@@ -31,15 +42,17 @@ public class BotScorerSignalTests
     }
 
     [Fact]
-    public void CheckEnvironmentSignals_NoPluginsReported_Adds0_03()
+    public void CheckEnvironmentSignals_NoPluginsReported_IsNotScored()
     {
+        // An empty navigator.plugins list is normal in privacy-hardened
+        // browsers, so it must not cost a legitimate user anything.
         var f = MakeFeatures(env: new EnvironmentFeatures { Webdriver = false, LanguagesCount = 1, HasPlugins = false });
         var reasons = new List<string>();
 
         var score = RiskCalculator.CheckEnvironmentSignals(f, reasons, 0.0);
 
-        Assert.Equal(0.03, score, precision: 3);
-        Assert.Contains(reasons, r => r.Contains("plugins", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(0.0, score, precision: 3);
+        Assert.Empty(reasons);
     }
 
     [Fact]
@@ -104,91 +117,132 @@ public class BotScorerSignalTests
         Assert.Empty(reasons);
     }
 
-    // --- Mouse -----------------------------------------------------------
+    // --- Pointer (mouse + touch) -----------------------------------------
 
     [Fact]
-    public void CheckMouseActivity_InsufficientData_Adds0_2AndSkipsFurtherChecks()
+    public void CheckPointerActivity_NoMouseAndNoTouch_Adds0_2()
     {
-        var f = MakeFeatures(mouse: new MouseFeatures { SampleCount = 0, InsufficientData = true });
+        var f = MakeFeatures(mouse: new PointerFeatures { SampleCount = 0 },
+                             touch: new PointerFeatures { SampleCount = 0 });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckMouseActivity(f, reasons, 0.0);
+        var score = RiskCalculator.CheckPointerActivity(f, reasons, 0.0);
 
         Assert.Equal(0.2, score, precision: 3);
         Assert.Single(reasons);
     }
 
     [Fact]
-    public void CheckMouseActivity_HighStraightLineRatio_Adds0_25()
+    public void CheckPointerActivity_TouchOnlyDevice_IsNotPenalised()
     {
-        var f = MakeFeatures(mouse: new MouseFeatures
+        // Regression guard: a phone emits no mousemove at all. Charging the
+        // "no pointer input" penalty for that flagged every mobile user.
+        var f = MakeFeatures(
+            mouse: new PointerFeatures { SampleCount = 0 },
+            touch: new PointerFeatures
+            {
+                SampleCount = 120,
+                StraightLineRatio = 0.1,
+                DirectionChangeRate = 0.3,
+                VelocityCv = 0.6,
+            });
+        var reasons = new List<string>();
+
+        var score = RiskCalculator.CheckPointerActivity(f, reasons, 0.0);
+
+        Assert.Equal(0.0, score, precision: 3);
+        Assert.Empty(reasons);
+    }
+
+    [Fact]
+    public void CheckPointerActivity_SyntheticTouchPath_IsStillCaught()
+    {
+        // Touch is not a free pass: a generated touch path is judged exactly
+        // like a generated mouse path.
+        var f = MakeFeatures(
+            mouse: new PointerFeatures { SampleCount = 0 },
+            touch: new PointerFeatures
+            {
+                SampleCount = 50,
+                StraightLineRatio = 0.95,
+                DirectionChangeRate = 0.5,
+                VelocityCv = 0.6,
+            });
+        var reasons = new List<string>();
+
+        var score = RiskCalculator.CheckPointerActivity(f, reasons, 0.0);
+
+        Assert.Equal(0.25, score, precision: 3);
+        Assert.Contains(reasons, r => r.Contains("touch", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void CheckPointerActivity_HighStraightLineRatio_Adds0_25()
+    {
+        var f = MakeFeatures(mouse: new PointerFeatures
         {
             SampleCount = 50,
-            InsufficientData = false,
             StraightLineRatio = 0.95,   // >= 0.85 threshold
             DirectionChangeRate = 0.5,  // above human floor, doesn't also fire
-            VelocityVariance = 5.0,     // above epsilon, doesn't also fire
+            VelocityCv = 0.6,           // above CV floor, doesn't also fire
         });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckMouseActivity(f, reasons, 0.0);
+        var score = RiskCalculator.CheckPointerActivity(f, reasons, 0.0);
 
         Assert.Equal(0.25, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("straight-line", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public void CheckMouseActivity_LowDirectionChangeRate_Adds0_15()
+    public void CheckPointerActivity_LowDirectionChangeRate_Adds0_15()
     {
-        var f = MakeFeatures(mouse: new MouseFeatures
+        var f = MakeFeatures(mouse: new PointerFeatures
         {
             SampleCount = 50,
-            InsufficientData = false,
-            StraightLineRatio = 0.1,    // below threshold, doesn't fire
+            StraightLineRatio = 0.1,
             DirectionChangeRate = 0.01, // < 0.05 human floor
-            VelocityVariance = 5.0,     // above epsilon, doesn't fire
+            VelocityCv = 0.6,
         });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckMouseActivity(f, reasons, 0.0);
+        var score = RiskCalculator.CheckPointerActivity(f, reasons, 0.0);
 
         Assert.Equal(0.15, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("direction variance", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public void CheckMouseActivity_LowVelocityVariance_Adds0_1()
+    public void CheckPointerActivity_LowVelocityCv_Adds0_1()
     {
-        var f = MakeFeatures(mouse: new MouseFeatures
+        var f = MakeFeatures(mouse: new PointerFeatures
         {
             SampleCount = 50,
-            InsufficientData = false,
             StraightLineRatio = 0.1,
             DirectionChangeRate = 0.5,
-            VelocityVariance = 0.1,     // < 0.5 epsilon
+            VelocityCv = 0.02,          // < 0.15 CV floor: near-constant speed
         });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckMouseActivity(f, reasons, 0.0);
+        var score = RiskCalculator.CheckPointerActivity(f, reasons, 0.0);
 
         Assert.Equal(0.1, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("suspiciously constant", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
-    public void CheckMouseActivity_NaturalMovement_AddsNothing()
+    public void CheckPointerActivity_NaturalMouseMovement_AddsNothing()
     {
-        var f = MakeFeatures(mouse: new MouseFeatures
+        var f = MakeFeatures(mouse: new PointerFeatures
         {
             SampleCount = 200,
-            InsufficientData = false,
             StraightLineRatio = 0.1,
             DirectionChangeRate = 0.3,
-            VelocityVariance = 2.0,
+            VelocityCv = 0.8,
         });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckMouseActivity(f, reasons, 0.0);
+        var score = RiskCalculator.CheckPointerActivity(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
@@ -202,9 +256,8 @@ public class BotScorerSignalTests
         var f = MakeFeatures(keyboard: new KeyboardFeatures
         {
             SampleCount = 10,
-            InsufficientData = false,
-            DwellVariance = 0.1,   // < 0.5 epsilon
-            FlightVariance = 5.0,  // above epsilon, doesn't also fire
+            DwellCv = 0.02,   // < 0.15 CV floor
+            FlightCv = 0.6,   // above the floor, doesn't also fire
         });
         var reasons = new List<string>();
 
@@ -220,9 +273,8 @@ public class BotScorerSignalTests
         var f = MakeFeatures(keyboard: new KeyboardFeatures
         {
             SampleCount = 10,
-            InsufficientData = false,
-            DwellVariance = 5.0,   // above epsilon, doesn't fire
-            FlightVariance = 0.1,  // < 0.5 epsilon
+            DwellCv = 0.6,
+            FlightCv = 0.02,  // < 0.15 CV floor
         });
         var reasons = new List<string>();
 
@@ -233,16 +285,16 @@ public class BotScorerSignalTests
     }
 
     [Fact]
-    public void CheckKeyboardActivity_InsufficientData_SkipsEntirely()
+    public void CheckKeyboardActivity_NoKeystrokes_AddsNothing()
     {
-        // Uniform variance values that WOULD fire if InsufficientData were
-        // false — proving the early-return guard actually short-circuits.
+        // Zero variance on zero samples must NOT fire: the SampleCount > 3
+        // guard is what protects a session that legitimately never typed,
+        // now that there is no "insufficientData" escape hatch to rely on.
         var f = MakeFeatures(keyboard: new KeyboardFeatures
         {
             SampleCount = 0,
-            InsufficientData = true,
-            DwellVariance = 0.0,
-            FlightVariance = 0.0,
+            DwellCv = 0.0,
+            FlightCv = 0.0,
         });
         var reasons = new List<string>();
 
@@ -258,9 +310,8 @@ public class BotScorerSignalTests
         var f = MakeFeatures(keyboard: new KeyboardFeatures
         {
             SampleCount = 10,
-            InsufficientData = false,
-            DwellVariance = 10.0,
-            FlightVariance = 15.0,
+            DwellCv = 0.5,
+            FlightCv = 0.7,
         });
         var reasons = new List<string>();
 
@@ -275,12 +326,7 @@ public class BotScorerSignalTests
     [Fact]
     public void ScrollActivity_UniformDeltas_Adds0_05()
     {
-        var f = MakeFeatures(scroll: new ScrollFeatures
-        {
-            SampleCount = 8,
-            InsufficientData = false,
-            DeltaVariance = 0.1, // < 0.5 epsilon
-        });
+        var f = MakeFeatures(scroll: new ScrollFeatures { SampleCount = 8, DeltaCv = 0.02 });
         var reasons = new List<string>();
 
         var score = RiskCalculator.ScrollActivity(f, reasons, 0.0);
@@ -290,195 +336,13 @@ public class BotScorerSignalTests
     }
 
     [Fact]
-    public void ScrollActivity_InsufficientData_AddsNothing()
+    public void ScrollActivity_NoScrolling_AddsNothing()
     {
-        var f = MakeFeatures(scroll: new ScrollFeatures
-        {
-            SampleCount = 0,
-            InsufficientData = true,
-            DeltaVariance = 0.0, // would fire if InsufficientData were false
-        });
+        // Same protection as keyboard: SampleCount > 3 is the real gate.
+        var f = MakeFeatures(scroll: new ScrollFeatures { SampleCount = 0, DeltaCv = 0.0 });
         var reasons = new List<string>();
 
         var score = RiskCalculator.ScrollActivity(f, reasons, 0.0);
-
-        Assert.Equal(0.0, score, precision: 3);
-        Assert.Empty(reasons);
-    }
-
-    // --- Request pattern -----------------------------------------------
-
-    [Fact]
-    public void CheckRequestPatternSignals_NullRequestPattern_AddsNothing()
-    {
-        var f = MakeFeatures(requestPattern: null);
-        var reasons = new List<string>();
-
-        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
-
-        Assert.Equal(0.0, score, precision: 3);
-        Assert.Empty(reasons);
-    }
-
-    [Fact]
-    public void CheckRequestPatternSignals_InsufficientData_AddsNothing()
-    {
-        var f = MakeFeatures(requestPattern: new RequestPatternFeatures { InsufficientData = true });
-        var reasons = new List<string>();
-
-        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
-
-        Assert.Equal(0.0, score, precision: 3);
-        Assert.Empty(reasons);
-    }
-
-    [Fact]
-    public void CheckRequestPatternSignals_HoneypotHit_Adds0_6EvenWithInsufficientData()
-    {
-        // A honeypot hit should fire on its own even when there isn't
-        // enough volume yet for the other pattern checks — proving the
-        // honeypot check runs ahead of the InsufficientData early-return,
-        // not behind it.
-        var f = MakeFeatures(requestPattern: new RequestPatternFeatures
-        {
-            InsufficientData = true,
-            HitHoneypot = true,
-        });
-        var reasons = new List<string>();
-
-        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
-
-        Assert.Equal(0.6, score, precision: 3);
-        Assert.Contains(reasons, r => r.Contains("honeypot", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void CheckRequestPatternSignals_HighRequestVolume_Adds0_15()
-    {
-        var f = MakeFeatures(requestPattern: new RequestPatternFeatures
-        {
-            InsufficientData = false,
-            WindowMinutes = 15,
-            RequestCount = 60,               // >= 50 threshold
-            UniqueResourceCount = 5,          // below breadth threshold, doesn't also fire
-            RequestsPerUniqueResource = 12.0,
-            IntervalVarianceMs = 900_000,     // above epsilon, doesn't also fire
-            SequentialIdRatio = 0.0,
-            BrowsingTrailRatio = 1.0,
-        });
-        var reasons = new List<string>();
-
-        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
-
-        Assert.Equal(0.15, score, precision: 3);
-        Assert.Contains(reasons, r => r.Contains("high volume", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void CheckRequestPatternSignals_BreadthWithoutRepeats_Adds0_2()
-    {
-        var f = MakeFeatures(requestPattern: new RequestPatternFeatures
-        {
-            InsufficientData = false,
-            WindowMinutes = 15,
-            RequestCount = 20,                // below volume threshold
-            UniqueResourceCount = 18,          // >= 10 breadth threshold
-            RequestsPerUniqueResource = 1.1,   // <= 1.2 floor: almost no revisits
-            IntervalVarianceMs = 900_000,
-            SequentialIdRatio = 0.0,
-            BrowsingTrailRatio = 1.0,
-        });
-        var reasons = new List<string>();
-
-        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
-
-        Assert.Equal(0.2, score, precision: 3);
-        Assert.Contains(reasons, r => r.Contains("single-pass sweep", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void CheckRequestPatternSignals_UniformTiming_Adds0_15()
-    {
-        var f = MakeFeatures(requestPattern: new RequestPatternFeatures
-        {
-            InsufficientData = false,
-            WindowMinutes = 15,
-            RequestCount = 10,                 // > 5 threshold for the timing check
-            UniqueResourceCount = 5,
-            RequestsPerUniqueResource = 2.0,
-            IntervalVarianceMs = 1_000,         // < 250,000 epsilon: suspiciously regular
-            SequentialIdRatio = 0.0,
-            BrowsingTrailRatio = 1.0,
-        });
-        var reasons = new List<string>();
-
-        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
-
-        Assert.Equal(0.15, score, precision: 3);
-        Assert.Contains(reasons, r => r.Contains("evenly spaced", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void CheckRequestPatternSignals_SequentialIds_Adds0_2()
-    {
-        var f = MakeFeatures(requestPattern: new RequestPatternFeatures
-        {
-            InsufficientData = false,
-            WindowMinutes = 15,
-            RequestCount = 20,
-            UniqueResourceCount = 5,
-            RequestsPerUniqueResource = 4.0,
-            IntervalVarianceMs = 900_000,
-            SequentialIdRatio = 0.9,            // >= 0.6 threshold
-            BrowsingTrailRatio = 1.0,
-        });
-        var reasons = new List<string>();
-
-        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
-
-        Assert.Equal(0.2, score, precision: 3);
-        Assert.Contains(reasons, r => r.Contains("sequential", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void CheckRequestPatternSignals_NoBrowsingTrail_Adds0_15()
-    {
-        var f = MakeFeatures(requestPattern: new RequestPatternFeatures
-        {
-            InsufficientData = false,
-            WindowMinutes = 15,
-            RequestCount = 20,
-            UniqueResourceCount = 12,           // >= 10 breadth threshold
-            RequestsPerUniqueResource = 1.6,    // above LowRepeatFloor, doesn't also fire the sweep check
-            IntervalVarianceMs = 900_000,
-            SequentialIdRatio = 0.0,
-            BrowsingTrailRatio = 0.05,           // <= 0.2 floor: almost no preceding views
-        });
-        var reasons = new List<string>();
-
-        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
-
-        Assert.Equal(0.15, score, precision: 3);
-        Assert.Contains(reasons, r => r.Contains("browsing trail", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void CheckRequestPatternSignals_NormalBrowsing_AddsNothing()
-    {
-        var f = MakeFeatures(requestPattern: new RequestPatternFeatures
-        {
-            InsufficientData = false,
-            WindowMinutes = 15,
-            RequestCount = 14,
-            UniqueResourceCount = 6,
-            RequestsPerUniqueResource = 2.3,
-            IntervalVarianceMs = 4_500_000,
-            SequentialIdRatio = 0.1,
-            BrowsingTrailRatio = 0.9,
-        });
-        var reasons = new List<string>();
-
-        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
@@ -489,18 +353,17 @@ public class BotScorerSignalTests
     /// <summary>
     /// Builds a BotFeatures vector with sensible "clean" defaults for every
     /// field, letting each test override only the signal it's exercising.
-    /// Keeps tests focused on the one thing they're checking instead of
-    /// repeating a full object literal every time.
+    /// Every sub-object is populated, since they are all required now.
     /// </summary>
     private static BotFeatures MakeFeatures(
         double sessionDurationMs = 20_000,
         double? timeToFirstInteractionMs = 900,
         int clickCount = 1,
         EnvironmentFeatures? env = null,
-        MouseFeatures? mouse = null,
+        PointerFeatures? mouse = null,
+        PointerFeatures? touch = null,
         KeyboardFeatures? keyboard = null,
-        ScrollFeatures? scroll = null,
-        RequestPatternFeatures? requestPattern = null)
+        ScrollFeatures? scroll = null)
     {
         return new BotFeatures
         {
@@ -509,11 +372,10 @@ public class BotScorerSignalTests
             ClickCount = clickCount,
             FocusOrderLength = 1,
             Environment = env ?? new EnvironmentFeatures { Webdriver = false, LanguagesCount = 2, HasPlugins = true },
-            Mouse = mouse ?? new MouseFeatures { SampleCount = 100, InsufficientData = false, StraightLineRatio = 0.1, DirectionChangeRate = 0.3, VelocityVariance = 2.0 },
-            Keyboard = keyboard ?? new KeyboardFeatures { SampleCount = 10, InsufficientData = false, DwellVariance = 10.0, FlightVariance = 15.0 },
-            Scroll = scroll ?? new ScrollFeatures { SampleCount = 8, InsufficientData = false, DeltaVariance = 10.0 },
-            RequestPattern = requestPattern,
+            Mouse = mouse ?? new PointerFeatures { SampleCount = 100, StraightLineRatio = 0.1, DirectionChangeRate = 0.3, VelocityCv = 0.8 },
+            Touch = touch ?? new PointerFeatures { SampleCount = 0 },
+            Keyboard = keyboard ?? new KeyboardFeatures { SampleCount = 10, DwellCv = 0.5, FlightCv = 0.7 },
+            Scroll = scroll ?? new ScrollFeatures { SampleCount = 8, DeltaCv = 0.5 },
         };
     }
 }
-
