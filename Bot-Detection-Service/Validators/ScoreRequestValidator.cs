@@ -43,6 +43,10 @@ public static class ScoreRequestValidator
         {
             errors["sessionId"] = new[] { $"sessionId must be {MaxIdentifierLength} characters or fewer." };
         }
+        else if (HasControlCharacters(request.SessionId))
+        {
+            errors["sessionId"] = new[] { "sessionId contains unsupported characters." };
+        }
 
         // features: required. The scorer dereferences the four sub-objects
         // below, so each must be present too — a `= new()` initializer on the
@@ -67,6 +71,19 @@ public static class ScoreRequestValidator
         }
 
         return errors;
+    }
+
+    /// <summary>
+    /// sessionId ends up in log lines. Control characters (newline, carriage
+    /// return, escape) let a caller forge or corrupt log records, so reject them.
+    /// </summary>
+    private static bool HasControlCharacters(string value)
+    {
+        foreach (var c in value)
+        {
+            if (char.IsControl(c)) return true;
+        }
+        return false;
     }
 
     // The feature sub-objects are annotated non-null (they carry `= new()`
