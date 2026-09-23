@@ -8,7 +8,7 @@ namespace Bot_Detection.Tests
 {
     public class BotScorerIntegrationTests
     {
-        private readonly BotScorer _scorer = new();
+        private readonly RiskCalculator _scorer = new();
 
         [Fact]
         public void ObviousBot_WebdriverFlagAndNoMouseMovement_ScoresAsBot()

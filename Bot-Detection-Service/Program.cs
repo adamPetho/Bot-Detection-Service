@@ -8,7 +8,7 @@ namespace Bot_Detection_Service
         public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
-            builder.Services.AddSingleton<BotScorer>();
+            builder.Services.AddSingleton<RiskCalculator>();
             builder.Services.AddControllers();
 
             // Wide-open CORS for testing.
@@ -23,7 +23,7 @@ namespace Bot_Detection_Service
 
             app.UseCors("DevTestPage");
 
-            app.MapPost("/api/score", (BotCheckRequest req, BotScorer scorer) =>
+            app.MapPost("/api/score", (BotCheckRequest req, RiskCalculator scorer) =>
             {
                 var result = scorer.Score(req.Features);
 

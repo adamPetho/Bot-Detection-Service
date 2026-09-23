@@ -12,7 +12,7 @@ public class BotScorerSignalTests
         var f = MakeFeatures(env: new EnvironmentFeatures { Webdriver = true, LanguagesCount = 1, HasPlugins = true });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckEnvironmentSignals(f, reasons, 0.0);
+        var score = RiskCalculator.CheckEnvironmentSignals(f, reasons, 0.0);
 
         Assert.Equal(0.5, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("webdriver", StringComparison.OrdinalIgnoreCase));
@@ -24,7 +24,7 @@ public class BotScorerSignalTests
         var f = MakeFeatures(env: new EnvironmentFeatures { Webdriver = false, LanguagesCount = 0, HasPlugins = true });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckEnvironmentSignals(f, reasons, 0.0);
+        var score = RiskCalculator.CheckEnvironmentSignals(f, reasons, 0.0);
 
         Assert.Equal(0.05, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("languages", StringComparison.OrdinalIgnoreCase));
@@ -36,7 +36,7 @@ public class BotScorerSignalTests
         var f = MakeFeatures(env: new EnvironmentFeatures { Webdriver = false, LanguagesCount = 1, HasPlugins = false });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckEnvironmentSignals(f, reasons, 0.0);
+        var score = RiskCalculator.CheckEnvironmentSignals(f, reasons, 0.0);
 
         Assert.Equal(0.03, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("plugins", StringComparison.OrdinalIgnoreCase));
@@ -48,7 +48,7 @@ public class BotScorerSignalTests
         var f = MakeFeatures(env: new EnvironmentFeatures { Webdriver = false, LanguagesCount = 2, HasPlugins = true });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckEnvironmentSignals(f, reasons, 0.0);
+        var score = RiskCalculator.CheckEnvironmentSignals(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
@@ -62,7 +62,7 @@ public class BotScorerSignalTests
         var f = MakeFeatures(sessionDurationMs: 5_000, timeToFirstInteractionMs: null, clickCount: 1);
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckTimingSignals(f, reasons, 0.0);
+        var score = RiskCalculator.CheckTimingSignals(f, reasons, 0.0);
 
         Assert.Equal(0.2, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("no interaction", StringComparison.OrdinalIgnoreCase));
@@ -74,7 +74,7 @@ public class BotScorerSignalTests
         var f = MakeFeatures(sessionDurationMs: 5_000, timeToFirstInteractionMs: 20, clickCount: 1);
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckTimingSignals(f, reasons, 0.0);
+        var score = RiskCalculator.CheckTimingSignals(f, reasons, 0.0);
 
         Assert.Equal(0.15, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("implausibly fast", StringComparison.OrdinalIgnoreCase));
@@ -86,7 +86,7 @@ public class BotScorerSignalTests
         var f = MakeFeatures(sessionDurationMs: 300, timeToFirstInteractionMs: 200, clickCount: 1);
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckTimingSignals(f, reasons, 0.0);
+        var score = RiskCalculator.CheckTimingSignals(f, reasons, 0.0);
 
         Assert.Equal(0.15, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("completed in", StringComparison.OrdinalIgnoreCase));
@@ -98,7 +98,7 @@ public class BotScorerSignalTests
         var f = MakeFeatures(sessionDurationMs: 20_000, timeToFirstInteractionMs: 900, clickCount: 1);
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckTimingSignals(f, reasons, 0.0);
+        var score = RiskCalculator.CheckTimingSignals(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
@@ -112,7 +112,7 @@ public class BotScorerSignalTests
         var f = MakeFeatures(mouse: new MouseFeatures { SampleCount = 0, InsufficientData = true });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckMouseActivity(f, reasons, 0.0);
+        var score = RiskCalculator.CheckMouseActivity(f, reasons, 0.0);
 
         Assert.Equal(0.2, score, precision: 3);
         Assert.Single(reasons);
@@ -131,7 +131,7 @@ public class BotScorerSignalTests
         });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckMouseActivity(f, reasons, 0.0);
+        var score = RiskCalculator.CheckMouseActivity(f, reasons, 0.0);
 
         Assert.Equal(0.25, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("straight-line", StringComparison.OrdinalIgnoreCase));
@@ -150,7 +150,7 @@ public class BotScorerSignalTests
         });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckMouseActivity(f, reasons, 0.0);
+        var score = RiskCalculator.CheckMouseActivity(f, reasons, 0.0);
 
         Assert.Equal(0.15, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("direction variance", StringComparison.OrdinalIgnoreCase));
@@ -169,7 +169,7 @@ public class BotScorerSignalTests
         });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckMouseActivity(f, reasons, 0.0);
+        var score = RiskCalculator.CheckMouseActivity(f, reasons, 0.0);
 
         Assert.Equal(0.1, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("suspiciously constant", StringComparison.OrdinalIgnoreCase));
@@ -188,7 +188,7 @@ public class BotScorerSignalTests
         });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckMouseActivity(f, reasons, 0.0);
+        var score = RiskCalculator.CheckMouseActivity(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
@@ -208,7 +208,7 @@ public class BotScorerSignalTests
         });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckKeyboardActivity(f, reasons, 0.0);
+        var score = RiskCalculator.CheckKeyboardActivity(f, reasons, 0.0);
 
         Assert.Equal(0.15, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("dwell", StringComparison.OrdinalIgnoreCase));
@@ -226,7 +226,7 @@ public class BotScorerSignalTests
         });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckKeyboardActivity(f, reasons, 0.0);
+        var score = RiskCalculator.CheckKeyboardActivity(f, reasons, 0.0);
 
         Assert.Equal(0.1, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("flight", StringComparison.OrdinalIgnoreCase));
@@ -246,7 +246,7 @@ public class BotScorerSignalTests
         });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckKeyboardActivity(f, reasons, 0.0);
+        var score = RiskCalculator.CheckKeyboardActivity(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
@@ -264,7 +264,7 @@ public class BotScorerSignalTests
         });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckKeyboardActivity(f, reasons, 0.0);
+        var score = RiskCalculator.CheckKeyboardActivity(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
@@ -283,7 +283,7 @@ public class BotScorerSignalTests
         });
         var reasons = new List<string>();
 
-        var score = BotScorer.ScrollActivity(f, reasons, 0.0);
+        var score = RiskCalculator.ScrollActivity(f, reasons, 0.0);
 
         Assert.Equal(0.05, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("scroll", StringComparison.OrdinalIgnoreCase));
@@ -300,7 +300,7 @@ public class BotScorerSignalTests
         });
         var reasons = new List<string>();
 
-        var score = BotScorer.ScrollActivity(f, reasons, 0.0);
+        var score = RiskCalculator.ScrollActivity(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
@@ -314,7 +314,7 @@ public class BotScorerSignalTests
         var f = MakeFeatures(requestPattern: null);
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckRequestPatternSignals(f, reasons, 0.0);
+        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
@@ -326,7 +326,7 @@ public class BotScorerSignalTests
         var f = MakeFeatures(requestPattern: new RequestPatternFeatures { InsufficientData = true });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckRequestPatternSignals(f, reasons, 0.0);
+        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
@@ -346,7 +346,7 @@ public class BotScorerSignalTests
         });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckRequestPatternSignals(f, reasons, 0.0);
+        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
 
         Assert.Equal(0.6, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("honeypot", StringComparison.OrdinalIgnoreCase));
@@ -368,7 +368,7 @@ public class BotScorerSignalTests
         });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckRequestPatternSignals(f, reasons, 0.0);
+        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
 
         Assert.Equal(0.15, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("high volume", StringComparison.OrdinalIgnoreCase));
@@ -390,7 +390,7 @@ public class BotScorerSignalTests
         });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckRequestPatternSignals(f, reasons, 0.0);
+        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
 
         Assert.Equal(0.2, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("single-pass sweep", StringComparison.OrdinalIgnoreCase));
@@ -412,7 +412,7 @@ public class BotScorerSignalTests
         });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckRequestPatternSignals(f, reasons, 0.0);
+        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
 
         Assert.Equal(0.15, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("evenly spaced", StringComparison.OrdinalIgnoreCase));
@@ -434,7 +434,7 @@ public class BotScorerSignalTests
         });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckRequestPatternSignals(f, reasons, 0.0);
+        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
 
         Assert.Equal(0.2, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("sequential", StringComparison.OrdinalIgnoreCase));
@@ -456,7 +456,7 @@ public class BotScorerSignalTests
         });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckRequestPatternSignals(f, reasons, 0.0);
+        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
 
         Assert.Equal(0.15, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("browsing trail", StringComparison.OrdinalIgnoreCase));
@@ -478,7 +478,7 @@ public class BotScorerSignalTests
         });
         var reasons = new List<string>();
 
-        var score = BotScorer.CheckRequestPatternSignals(f, reasons, 0.0);
+        var score = RiskCalculator.CheckRequestPatternSignals(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);

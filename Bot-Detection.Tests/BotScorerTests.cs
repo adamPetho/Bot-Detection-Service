@@ -35,7 +35,7 @@ namespace Bot_Detection.Tests
                 Scroll = new ScrollFeatures { SampleCount = 0, InsufficientData = true },
             };
 
-            var scorer = new BotScorer();
+            var scorer = new RiskCalculator();
             var result = scorer.Score(features);
 
             Assert.Equal(RiskAction.Block, result.Action);

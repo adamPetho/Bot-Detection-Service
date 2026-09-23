@@ -24,7 +24,7 @@ namespace Bot_Detection_Service.Services
     /// logistic regression / gradient boosting over the same feature vector) and
     /// keep this class around as a fallback / sanity check.
     /// </summary>
-    public sealed class BotScorer
+    public sealed class RiskCalculator
     {
         // Tunable thresholds — start here, adjust against your own traffic.
         private const double MinHumanMouseSamples = 5;

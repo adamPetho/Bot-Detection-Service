@@ -18,7 +18,7 @@ namespace Bot_Detection.Tests
         [InlineData(1.0, RiskAction.Block)]
         public void DetermineVerdict_AtAndAroundThresholds_ReturnsExpectedBand(double score, RiskAction expected)
         {
-            var actual = BotScorer.DetermineAction(score);
+            var actual = RiskCalculator.DetermineAction(score);
 
             Assert.Equal(expected, actual);
         }
