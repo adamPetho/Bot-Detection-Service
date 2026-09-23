@@ -1,45 +1,66 @@
-﻿using Bot_Detection_Service.Models;
+﻿using BotDetection;
 
 namespace Bot_Detection_Service.Services
 {
+    /// <summary>
+    /// The recommended enforcement tier for a request. This is policy the caller
+    /// consumes — NOT a claim about whether the client is literally a bot (an
+    /// authenticated customer scraping the database is not a bot, but still earns
+    /// a Challenge or Block). The service recommends the tier; the enforcing
+    /// service owns the mechanism (which challenge — CAPTCHA, step-up, rate-limit
+    /// — or how to block).
+    /// </summary>
     public enum RiskAction
     {
-        Allow,
-        Challenge,
-        Block,
+        Allow,      // proceed normally
+        Challenge,  // add friction (CAPTCHA, step-up auth, soft rate-limit)
+        Block,      // deny / hard-throttle
     }
 
     public sealed class ScoreResult
     {
-        public double Score { get; init; }              // 0.0 (allow) >= 0.3 (challenge) =< 1.0 (block)
+        public double Score { get; init; }              // 0.0 (no risk) - 1.0 (max risk)
         public RiskAction Action { get; init; }
         public IReadOnlyList<string> Reasons { get; init; } = Array.Empty<string>();
     }
 
     /// <summary>
-    /// Rule-based weighted scorer. This is a deliberately interpretable starting
-    /// point: each signal contributes a bounded weight, reasons are human-readable,
-    /// and thresholds are tunable constants. Once you have labeled session data
-    /// (known-bot vs. known-human), swap this for a trained classifier (e.g.
-    /// logistic regression / gradient boosting over the same feature vector) and
-    /// keep this class around as a fallback / sanity check.
+    /// Rule-based weighted scorer. Deliberately interpretable: each signal
+    /// contributes a bounded weight, reasons are human-readable, and thresholds
+    /// are named constants. The numeric Score is the source of truth; Action is a
+    /// convenience mapping so the caller doesn't have to re-derive policy from the
+    /// number (it's free to ignore Action and apply its own thresholds to Score).
+    ///
+    /// Each Check* method takes the running score and returns the updated score,
+    /// so Score() is just a pipeline of independent, individually testable
+    /// signal checks. They're `public static` (rather than private) so the
+    /// test project — via [publicsVisibleTo] below — can exercise each
+    /// signal category directly, without needing to fabricate a full feature
+    /// vector just to isolate one check.
     /// </summary>
     public sealed class RiskCalculator
     {
         // Tunable thresholds — start here, adjust against your own traffic.
-        private const double MinHumanMouseSamples = 5;
+        private const int MinPointerSamples = 5;
         private const double SuperhumanFormFillMs = 800;      // filled+submitted implausibly fast
         private const double StraightLineRatioBotThreshold = 0.85;
         private const double DirectionChangeRateHumanFloor = 0.05;
-        private const double ZeroVarianceEpsilon = 0.5;
-        private const int MinRequestsForTimingCheck = 5;
-        private const int HighRequestCountThreshold = 50;
-        private const int RequestBreadthThreshold = 10;         // distinct resources touched
-        private const double LowRepeatFloor = 1.2;               // requests per unique resource
-        private const double RequestIntervalVarianceEpsilonMs2 = 250_000; // ~500ms stddev
-        private const double HighSequentialIdRatioThreshold = 0.6;
-        private const double LowBrowsingTrailFloor = 0.2;
-        private const double HoneypotScoreAdd = 0.6;   // near-certain on its own
+        private const int MinKeystrokesForRhythmCheck = 3;
+        private const int MinScrollSamplesForRhythmCheck = 3;
+
+        // Variability floor, expressed as a coefficient of variation
+        // (stddev / mean). CV is dimensionless, so one number is meaningful
+        // across pointer velocity, keystroke timing and scroll distance alike —
+        // unlike a raw variance, whose scale rides on the units it measured.
+        // Human input sits well above this; a generated stream sits near zero.
+        // PLACEHOLDER VALUE: needs calibration against real traffic.
+        private const double LowVariabilityCvFloor = 0.15;
+
+        // Action thresholds — score bands mapping to a recommended enforcement
+        // tier. Kept as constants here; making them config/env-driven is a
+        // deployment concern, deferred to that task.
+        private const double ChallengeThreshold = 0.3;   // >= this -> Challenge
+        private const double BlockThreshold = 0.6;       // >= this -> Block
 
         public ScoreResult Score(BotFeatures f)
         {
@@ -48,119 +69,42 @@ namespace Bot_Detection_Service.Services
 
             score = CheckEnvironmentSignals(f, reasons, score);
             score = CheckTimingSignals(f, reasons, score);
-            score = CheckMouseActivity(f, reasons, score);
+            score = CheckPointerActivity(f, reasons, score);
             score = CheckKeyboardActivity(f, reasons, score);
             score = ScrollActivity(f, reasons, score);
-            score = CheckRequestPatternSignals(f, reasons, score);
 
             score = Math.Clamp(score, 0.0, 1.0);
 
-            RiskAction action = DetermineAction(score);
+            var action = DetermineAction(score);
 
             return new ScoreResult { Score = score, Action = action, Reasons = reasons };
         }
 
-        public static RiskAction DetermineAction(double score)
+        // --- Signal checks ----------------------------------------------------
+
+        public static double CheckEnvironmentSignals(BotFeatures f, List<string> reasons, double score)
         {
-            return score switch
+            if (f.Environment.Webdriver)
             {
-                >= 0.6 => RiskAction.Block,
-                >= 0.3 => RiskAction.Challenge,
-                _ => RiskAction.Allow,
-            };
-        }
-
-        public static double CheckRequestPatternSignals(BotFeatures f, List<string> reasons, double score)
-        {
-            var rp = f.RequestPattern;
-            if (rp is null)
-            {
-                return score;
+                score += 0.5;
+                reasons.Add("navigator.webdriver flag is set");
             }
 
-            // Checked before the InsufficientData gate below: a single honeypot
-            // hit is meaningful on its own, even from a session with too little
-            // overall volume for the pattern-based checks to say anything yet.
-            if (rp.HitHoneypot)
-            {
-                score += HoneypotScoreAdd;
-                reasons.Add("accessed a honeypot resource that is never linked from the real UI");
-            }
-
-            if (rp.InsufficientData)
-            {
-                return score;
-            }
-
-            if (rp.RequestCount >= HighRequestCountThreshold)
-            {
-                score += 0.15;
-                reasons.Add($"{rp.RequestCount} requests in the last {rp.WindowMinutes:F0} minutes (high volume)");
-            }
-
-            if (rp.UniqueResourceCount >= RequestBreadthThreshold && rp.RequestsPerUniqueResource <= LowRepeatFloor)
-            {
-                score += 0.2;
-                reasons.Add($"touched {rp.UniqueResourceCount} distinct resources with almost no repeat visits (single-pass sweep)");
-            }
-
-            if (rp.RequestCount > MinRequestsForTimingCheck && rp.IntervalVarianceMs < RequestIntervalVarianceEpsilonMs2)
-            {
-                score += 0.15;
-                reasons.Add("requests are suspiciously evenly spaced in time");
-            }
-
-            if (rp.SequentialIdRatio >= HighSequentialIdRatioThreshold)
-            {
-                score += 0.2;
-                reasons.Add($"{rp.SequentialIdRatio:P0} of requested resource IDs are sequential (enumeration signature)");
-            }
-
-            if (rp.UniqueResourceCount >= RequestBreadthThreshold && rp.BrowsingTrailRatio <= LowBrowsingTrailFloor)
-            {
-                score += 0.15;
-                reasons.Add("downloads with almost no preceding page views (skipping the normal browsing trail)");
-            }
-
-            return score;
-        }
-
-        public static double ScrollActivity(BotFeatures f, List<string> reasons, double score)
-        {
-            // --- Scroll signals ---
-            if (!f.Scroll.InsufficientData && f.Scroll.DeltaVariance < ZeroVarianceEpsilon && f.Scroll.SampleCount > 3)
+            if (f.Environment.LanguagesCount == 0)
             {
                 score += 0.05;
-                reasons.Add("scroll deltas are suspiciously uniform");
+                reasons.Add("no navigator.languages reported");
             }
 
-            return score;
-        }
-
-        public static double CheckKeyboardActivity(BotFeatures f, List<string> reasons, double score)
-        {
-            // --- Keyboard signals ---
-            if (!f.Keyboard.InsufficientData)
-            {
-                if (f.Keyboard.DwellVariance < ZeroVarianceEpsilon && f.Keyboard.SampleCount > 3)
-                {
-                    score += 0.15;
-                    reasons.Add("keystroke dwell time is suspiciously uniform");
-                }
-
-                if (f.Keyboard.FlightVariance < ZeroVarianceEpsilon && f.Keyboard.SampleCount > 3)
-                {
-                    score += 0.1;
-                    reasons.Add("keystroke flight time is suspiciously uniform");
-                }
-            }
+            // NOTE: navigator.plugins being empty is deliberately NOT scored.
+            // It is normal in privacy-hardened browsers and with various
+            // extensions, so it punished legitimate users for a 0.03 signal.
 
             return score;
         }
 
         public static double CheckTimingSignals(BotFeatures f, List<string> reasons, double score)
         {
-            // --- Timing signals ---
             if (f.TimeToFirstInteractionMs is double tti)
             {
                 if (tti < 50)
@@ -184,60 +128,108 @@ namespace Bot_Detection_Service.Services
             return score;
         }
 
-        public static double CheckEnvironmentSignals(BotFeatures f, List<string> reasons, double score)
+        /// <summary>
+        /// Pointer movement, covering mouse AND touch.
+        ///
+        /// The "no pointer input" penalty fires only when NEITHER stream has
+        /// usable samples. Penalising absent mouse data alone charged every
+        /// phone and tablet user a false positive, since touch devices emit no
+        /// mousemove at all.
+        ///
+        /// Whichever streams are present are then analysed identically —
+        /// generated touch paths are as unnaturally linear and evenly-paced as
+        /// generated mouse paths.
+        /// </summary>
+        public static double CheckPointerActivity(BotFeatures f, List<string> reasons, double score)
         {
-            // --- Environment signals (strong, cheap) ---
-            if (f.Environment.Webdriver)
-            {
-                score += 0.5;
-                reasons.Add("navigator.webdriver flag is set");
-            }
+            var mouseUsable = f.Mouse.SampleCount >= MinPointerSamples;
+            var touchUsable = f.Touch.SampleCount >= MinPointerSamples;
 
-            if (f.Environment.LanguagesCount == 0)
-            {
-                score += 0.05;
-                reasons.Add("no navigator.languages reported");
-            }
-
-            if (f.Environment.HasPlugins == false)
-            {
-                score += 0.03;
-                reasons.Add("no browser plugins reported");
-            }
-
-            return score;
-        }
-
-        public static double CheckMouseActivity(BotFeatures f, List<string> reasons, double score)
-        {
-            // --- Mouse signals ---
-            if (f.Mouse.InsufficientData || f.Mouse.SampleCount < MinHumanMouseSamples)
+            if (!mouseUsable && !touchUsable)
             {
                 score += 0.2;
-                reasons.Add("little to no mouse movement recorded");
+                reasons.Add("no pointer input of any kind recorded (neither mouse nor touch)");
+                return score;
             }
-            else
+
+            if (mouseUsable) score = CheckPointerStream(f.Mouse, "mouse", reasons, score);
+            if (touchUsable) score = CheckPointerStream(f.Touch, "touch", reasons, score);
+
+            return score;
+        }
+
+        /// <summary>Shared movement analysis for one pointer stream.</summary>
+        private static double CheckPointerStream(PointerFeatures p, string label, List<string> reasons, double score)
+        {
+            if (p.StraightLineRatio >= StraightLineRatioBotThreshold)
             {
-                if (f.Mouse.StraightLineRatio >= StraightLineRatioBotThreshold)
-                {
-                    score += 0.25;
-                    reasons.Add($"mouse path is {f.Mouse.StraightLineRatio:P0} straight-line (linear interpolation signature)");
-                }
+                score += 0.25;
+                reasons.Add($"{label} path is {p.StraightLineRatio:P0} straight-line (linear interpolation signature)");
+            }
 
-                if (f.Mouse.DirectionChangeRate < DirectionChangeRateHumanFloor)
-                {
-                    score += 0.15;
-                    reasons.Add("mouse movement has almost no direction variance");
-                }
+            if (p.DirectionChangeRate < DirectionChangeRateHumanFloor)
+            {
+                score += 0.15;
+                reasons.Add($"{label} movement has almost no direction variance");
+            }
 
-                if (f.Mouse.VelocityVariance < ZeroVarianceEpsilon)
-                {
-                    score += 0.1;
-                    reasons.Add("mouse velocity is suspiciously constant");
-                }
+            if (p.VelocityCv < LowVariabilityCvFloor)
+            {
+                score += 0.1;
+                reasons.Add($"{label} velocity is suspiciously constant");
             }
 
             return score;
         }
+
+        public static double CheckKeyboardActivity(BotFeatures f, List<string> reasons, double score)
+        {
+            // No early-return escape hatch: the SampleCount > 3 guards below are
+            // the real gate, so a session that genuinely never typed simply fires
+            // neither check.
+            if (f.Keyboard.SampleCount <= MinKeystrokesForRhythmCheck)
+            {
+                return score; // too few presses for the rhythm to mean anything
+            }
+
+            if (f.Keyboard.DwellCv < LowVariabilityCvFloor)
+            {
+                score += 0.15;
+                reasons.Add("keystroke dwell time is suspiciously uniform");
+            }
+
+            if (f.Keyboard.FlightCv < LowVariabilityCvFloor)
+            {
+                score += 0.1;
+                reasons.Add("keystroke flight time is suspiciously uniform");
+            }
+
+            return score;
+        }
+
+        public static double ScrollActivity(BotFeatures f, List<string> reasons, double score)
+        {
+            if (f.Scroll.DeltaCv < LowVariabilityCvFloor && f.Scroll.SampleCount > MinScrollSamplesForRhythmCheck)
+            {
+                score += 0.05;
+                reasons.Add("scroll deltas are suspiciously uniform");
+            }
+
+            return score;
+        }
+
+        // --- Action mapping -----------------------------------------------------
+
+        /// <summary>
+        /// Pure score-to-action mapping, pulled out on its own so the threshold
+        /// boundaries (0.3 and 0.6) can be tested exhaustively without needing to
+        /// construct a BotFeatures vector that happens to produce that exact score.
+        /// </summary>
+        public static RiskAction DetermineAction(double score) => score switch
+        {
+            >= BlockThreshold => RiskAction.Block,
+            >= ChallengeThreshold => RiskAction.Challenge,
+            _ => RiskAction.Allow,
+        };
     }
 }
