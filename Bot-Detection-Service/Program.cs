@@ -13,15 +13,19 @@ namespace Bot_Detection_Service
 
             // Wide-open CORS for testing.
             // Set up proper CORS on production.
+#if DEBUG
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy("DevTestPage", policy =>
                     policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
             });
+#endif
 
             var app = builder.Build();
 
+#if DEBUG
             app.UseCors("DevTestPage");
+#endif
 
             app.MapPost("/api/score", (BotCheckRequest req, RiskCalculator scorer) =>
             {
