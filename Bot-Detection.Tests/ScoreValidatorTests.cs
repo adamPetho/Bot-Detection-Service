@@ -66,6 +66,19 @@ public class ScoreRequestValidatorTests
     }
 
     [Fact]
+    public void Validate_SessionIdAtExactlyMaxLength_IsAllowed()
+    {
+        var req = ValidRequest() with
+        {
+            SessionId = new string('x', ScoreRequestValidator.MaxIdentifierLength),
+        };
+
+        var errors = ScoreRequestValidator.Validate(req);
+
+        Assert.Empty(errors);
+    }
+
+    [Fact]
     public void Validate_NullFeatures_ReportsFeaturesError()
     {
         var req = ValidRequest() with { Features = null! };
