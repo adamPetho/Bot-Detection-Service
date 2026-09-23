@@ -2,147 +2,87 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Bot Detection — Manual Test Page</title>
+<title>Behavioral Telemetry — Manual Test Page</title>
 <style>
   :root {
-    --bg: #0f1220;
-    --panel: #171b2e;
-    --border: #2a2f4a;
-    --text: #e7e9f5;
-    --muted: #9aa0c0;
-    --human: #3ddc97;
-    --suspicious: #f5c542;
-    --bot: #ff5d5d;
+    --bg: #0f1220; --panel: #171b2e; --border: #2a2f4a; --text: #e7e9f5;
+    --muted: #9aa0c0; --allow: #3ddc97; --challenge: #f5c542; --block: #ff5d5d;
     --accent: #6c8cff;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    display: flex;
-    justify-content: center;
-    padding: 32px 16px 80px;
+    background: var(--bg); color: var(--text);
+    display: flex; justify-content: center; padding: 32px 16px 80px;
   }
   .wrap { width: 100%; max-width: 760px; }
   h1 { font-size: 1.4rem; margin-bottom: 4px; }
   .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 24px; }
   .panel {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 20px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px; margin-bottom: 20px;
   }
   .panel h2 { font-size: 1rem; margin: 0 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
   label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; }
   input[type="text"], input[type="email"], input[type="url"] {
-    width: 100%;
-    background: #10142400;
-    background: #0b0e1c;
-    border: 1px solid var(--border);
-    color: var(--text);
-    border-radius: 8px;
-    padding: 10px 12px;
-    font-size: 0.95rem;
-    margin-bottom: 14px;
+    width: 100%; background: #0b0e1c; border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; padding: 10px 12px;
+    font-size: 0.95rem; margin-bottom: 14px;
   }
   .scroll-box {
-    height: 120px;
-    overflow-y: scroll;
-    border: 1px dashed var(--border);
-    border-radius: 8px;
-    padding: 12px;
-    color: var(--muted);
-    font-size: 0.85rem;
-    line-height: 1.7;
-    margin-bottom: 4px;
+    height: 120px; overflow-y: scroll; border: 1px dashed var(--border);
+    border-radius: 8px; padding: 12px; color: var(--muted);
+    font-size: 0.85rem; line-height: 1.7; margin-bottom: 4px;
   }
   .hint { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 10px;
-  }
-  .stat {
-    background: #0b0e1c;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
-  }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  .stat { background: #0b0e1c; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
   .stat .n { font-size: 1.3rem; font-weight: 600; }
   .stat .l { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
   button {
-    background: var(--accent);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    padding: 12px 20px;
-    font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
-    width: 100%;
+    background: var(--accent); color: white; border: none; border-radius: 8px;
+    padding: 12px 20px; font-size: 0.95rem; font-weight: 600; cursor: pointer; width: 100%;
   }
   button:hover { filter: brightness(1.08); }
   button:active { transform: translateY(1px); }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
   .result { margin-top: 18px; display: none; }
-  .verdict-badge {
-    display: inline-block;
-    padding: 6px 14px;
-    border-radius: 999px;
-    font-weight: 700;
-    font-size: 0.85rem;
-    letter-spacing: 0.03em;
-    margin-bottom: 10px;
+  .action-badge {
+    display: inline-block; padding: 6px 14px; border-radius: 999px;
+    font-weight: 700; font-size: 0.85rem; letter-spacing: 0.03em; margin-bottom: 10px;
   }
-  .verdict-Human { background: rgba(61,220,151,0.15); color: var(--human); border: 1px solid var(--human); }
-  .verdict-Suspicious { background: rgba(245,197,66,0.15); color: var(--suspicious); border: 1px solid var(--suspicious); }
-  .verdict-Bot { background: rgba(255,93,93,0.15); color: var(--bot); border: 1px solid var(--bot); }
-  .score-bar-track {
-    background: #0b0e1c;
-    border-radius: 6px;
-    height: 10px;
-    overflow: hidden;
-    margin-bottom: 14px;
-  }
+  .action-Allow { background: rgba(61,220,151,0.15); color: var(--allow); border: 1px solid var(--allow); }
+  .action-Challenge { background: rgba(245,197,66,0.15); color: var(--challenge); border: 1px solid var(--challenge); }
+  .action-Block { background: rgba(255,93,93,0.15); color: var(--block); border: 1px solid var(--block); }
+  .score-bar-track { background: #0b0e1c; border-radius: 6px; height: 10px; overflow: hidden; margin-bottom: 14px; }
   .score-bar-fill { height: 100%; border-radius: 6px; transition: width 0.4s ease; }
   ul.reasons { margin: 0; padding-left: 20px; font-size: 0.88rem; color: var(--muted); }
   ul.reasons li { margin-bottom: 4px; }
   details { margin-top: 14px; }
   summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
   pre {
-    background: #0b0e1c;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px;
-    overflow-x: auto;
-    font-size: 0.78rem;
-    color: #c7cbe8;
-    margin-top: 8px;
+    background: #0b0e1c; border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px; overflow-x: auto; font-size: 0.78rem; color: #c7cbe8; margin-top: 8px;
   }
   .error-box {
-    background: rgba(255,93,93,0.1);
-    border: 1px solid var(--bot);
-    color: var(--bot);
-    border-radius: 8px;
-    padding: 12px;
-    font-size: 0.85rem;
-    margin-top: 14px;
-    display: none;
+    background: rgba(255,93,93,0.1); border: 1px solid var(--block); color: var(--block);
+    border-radius: 8px; padding: 12px; font-size: 0.85rem; margin-top: 14px; display: none;
   }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Bot Detection — Manual Test Page</h1>
-  <div class="sub">Telemetry collection starts automatically on load. Move the mouse, type, scroll the box below, then press the button to score the session.</div>
+  <h1>Behavioral Telemetry — Manual Test Page</h1>
+  <div class="sub">
+    Exercises the client-side telemetry the service scores: mouse, keyboard,
+    scroll and environment. Collection starts on load. Interact, then evaluate.
+  </div>
 
   <div class="panel">
     <h2>API endpoint</h2>
     <label for="endpoint">POST target</label>
-    <input type="url" id="endpoint" value="http://localhost:5000/api/bot-check">
+    <input type="url" id="endpoint" value="http://localhost:5000/api/score">
     <div class="hint">Adjust the port if your <code>dotnet run</code> output shows a different one.</div>
   </div>
 
@@ -164,6 +104,7 @@
     <h2>Live telemetry counters</h2>
     <div class="stats-grid">
       <div class="stat"><div class="n" id="statMouse">0</div><div class="l">Mouse samples</div></div>
+      <div class="stat"><div class="n" id="statTouch">0</div><div class="l">Touch samples</div></div>
       <div class="stat"><div class="n" id="statKeys">0</div><div class="l">Key events</div></div>
       <div class="stat"><div class="n" id="statScroll">0</div><div class="l">Scroll events</div></div>
       <div class="stat"><div class="n" id="statClicks">0</div><div class="l">Clicks</div></div>
@@ -171,38 +112,14 @@
     </div>
   </div>
 
-  <div class="panel">
-    <h2>Simulate request-pattern behavior</h2>
-    <div class="hint" style="margin-bottom:12px;">
-      This logs into the rolling window tracked by request-pattern-tracker.js
-      (persisted in localStorage across page loads). A real user views a
-      company page before downloading its document — try the paired buttons
-      for that, then compare against "Download only" or the rapid-scrape
-      simulation to see the score react.
-    </div>
-    <div class="stats-grid" style="margin-bottom:12px;">
-      <div class="stat"><div class="n" id="statReqCount">0</div><div class="l">Requests (window)</div></div>
-      <div class="stat"><div class="n" id="statReqUnique">0</div><div class="l">Unique resources</div></div>
-      <div class="stat"><div class="n" id="statReqTrail">–</div><div class="l">Browsing trail</div></div>
-      <div class="stat"><div class="n" id="statReqHoneypot">No</div><div class="l">Honeypot hit</div></div>
-    </div>
-    <div style="display:flex; flex-direction:column; gap:8px;">
-      <button id="btnViewAndDownload" style="background:#2a2f4a;">View company page, then download its document</button>
-      <button id="btnDownloadOnly" style="background:#2a2f4a;">Download only (no page view first)</button>
-      <button id="btnSimulateScrape" style="background:#2a2f4a;">Simulate rapid sequential scrape (20 requests)</button>
-      <button id="btnHitHoneypot" style="background:var(--bot);">Hit honeypot resource</button>
-      <button id="btnResetLog" style="background:#2a2f4a;">Reset request log</button>
-    </div>
-  </div>
-
-  <button id="evaluateBtn">Evaluate Score</button>
+  <button id="evaluateBtn">Evaluate risk</button>
 
   <div class="error-box" id="errorBox"></div>
 
   <div class="result" id="result">
     <div class="panel">
       <h2>Result</h2>
-      <div id="verdictBadge" class="verdict-badge"></div>
+      <div id="actionBadge" class="action-badge"></div>
       <div class="score-bar-track"><div id="scoreBarFill" class="score-bar-fill"></div></div>
       <div id="scoreText" class="hint" style="margin-bottom:14px;"></div>
       <ul class="reasons" id="reasonsList"></ul>
@@ -215,68 +132,20 @@
 </div>
 
 <script src="telemetry-collector.js"></script>
-<script src="request-pattern-tracker.js"></script>
 <script>
   const collector = new BotTelemetry();
   collector.start();
 
-  // Small window (2 minutes) and a low sample floor purely so this is
-  // demonstrable by hand-clicking in a manual test session — in production
-  // you'd use something like 15–30 minutes and the library default of 5.
-  const tracker = new RequestPatternTracker({ windowMinutes: 2, minRequestsForAnalysis: 3 });
-
-  // Live counter display so you can see telemetry accumulating in real time.
+  // Live counters so telemetry accumulation is visible while interacting.
   setInterval(() => {
     document.getElementById('statMouse').textContent = collector.mouseEvents.length;
-    document.getElementById('statKeys').textContent = collector.keyEvents.length;
+    document.getElementById('statTouch').textContent = collector.touchEvents.length;
+    document.getElementById('statKeys').textContent = collector.keyDwells.length;
     document.getElementById('statScroll').textContent = collector.scrollEvents.length;
     document.getElementById('statClicks').textContent = collector.clickEvents.length;
     document.getElementById('statTime').textContent =
       ((performance.now() - collector.startTime) / 1000).toFixed(1) + 's';
-
-    const rp = tracker.computeFeatures();
-    document.getElementById('statReqCount').textContent = rp.requestCount;
-    document.getElementById('statReqUnique').textContent = rp.uniqueResourceCount;
-    document.getElementById('statReqTrail').textContent =
-      rp.insufficientData ? '–' : (rp.browsingTrailRatio * 100).toFixed(0) + '%';
-    document.getElementById('statReqHoneypot').textContent = rp.hitHoneypot ? 'YES' : 'No';
-    document.getElementById('statReqHoneypot').style.color = rp.hitHoneypot ? 'var(--bot)' : '';
   }, 250);
-
-  // --- Request-pattern simulation buttons -------------------------------
-  // A small pool of resource IDs so "view then download" and "sequential
-  // scrape" have something realistic to work with. Trailing numbers matter
-  // for the sequential-ID heuristic — see request-pattern-tracker.js.
-  function randomCompanyId() {
-    return 'company-' + (1000 + Math.floor(Math.random() * 50));
-  }
-
-  document.getElementById('btnViewAndDownload').addEventListener('click', () => {
-    const id = randomCompanyId();
-    tracker.logPageView(id);
-    setTimeout(() => tracker.logRequest(id), 150); // small realistic delay
-  });
-
-  document.getElementById('btnDownloadOnly').addEventListener('click', () => {
-    tracker.logRequest(randomCompanyId());
-  });
-
-  document.getElementById('btnSimulateScrape').addEventListener('click', () => {
-    // Sequential IDs, no page views, tight timing — the shape of a script
-    // walking through records by incrementing an ID.
-    const start = 2000 + Math.floor(Math.random() * 100);
-    for (let i = 0; i < 20; i++) {
-      tracker.logRequest('company-' + (start + i));
-    }
-  });
-
-  document.getElementById('btnHitHoneypot').addEventListener('click', () => {
-    tracker.logHoneypotHit('decoy-99981');
-  });
-
-  document.getElementById('btnResetLog').addEventListener('click', () => {
-    tracker.reset();
-  });
 
   const btn = document.getElementById('evaluateBtn');
   const resultBox = document.getElementById('result');
@@ -289,7 +158,6 @@
     resultBox.style.display = 'none';
 
     const features = collector.computeFeatures();
-    features.requestPattern = tracker.computeFeatures();
     const endpoint = document.getElementById('endpoint').value;
 
     try {
@@ -298,45 +166,41 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: collector.sessionId, features }),
       });
-
-      if (!res.ok) {
-        throw new Error(`Server responded ${res.status} ${res.statusText}`);
-      }
-
-      const data = await res.json();
-      renderResult(data, features);
+      if (!res.ok) throw new Error(`Server responded ${res.status} ${res.statusText}`);
+      renderResult(await res.json(), features);
     } catch (err) {
       errorBox.textContent =
-        `Could not reach the scoring API (${err.message}). ` +
-        `Make sure "dotnet run" is running in the BotDetection folder and the endpoint above matches its port. ` +
+        `Could not reach the scoring API (${err.message}). Make sure "dotnet run" is ` +
+        `running in the BotDetection folder and the endpoint above matches its port. ` +
         `Raw feature vector is shown below for inspection instead.`;
       errorBox.style.display = 'block';
       document.getElementById('rawFeatures').textContent = JSON.stringify(features, null, 2);
       resultBox.style.display = 'block';
-      document.getElementById('verdictBadge').style.display = 'none';
+      document.getElementById('actionBadge').style.display = 'none';
       document.getElementById('scoreBarFill').style.width = '0%';
       document.getElementById('scoreText').textContent = '';
       document.getElementById('reasonsList').innerHTML = '';
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Evaluate Score';
+      btn.textContent = 'Evaluate risk';
     }
   });
 
   function renderResult(data, features) {
-    const badge = document.getElementById('verdictBadge');
+    const action = data.action ?? data.Action;
+    const badge = document.getElementById('actionBadge');
     badge.style.display = 'inline-block';
-    badge.textContent = data.verdict ?? data.Verdict;
-    badge.className = 'verdict-badge verdict-' + (data.verdict ?? data.Verdict);
+    badge.textContent = action;
+    badge.className = 'action-badge action-' + action;
 
     const score = data.score ?? data.Score;
     const fill = document.getElementById('scoreBarFill');
     fill.style.width = (score * 100).toFixed(0) + '%';
     fill.style.background =
-      score >= 0.6 ? 'var(--bot)' : score >= 0.3 ? 'var(--suspicious)' : 'var(--human)';
+      score >= 0.6 ? 'var(--block)' : score >= 0.3 ? 'var(--challenge)' : 'var(--allow)';
 
     document.getElementById('scoreText').textContent =
-      `Score: ${score.toFixed(3)} (0 = human-like, 1 = bot-like)`;
+      `Score: ${score.toFixed(3)} (0 = no risk, 1 = high risk)`;
 
     const reasons = data.reasons ?? data.Reasons ?? [];
     const list = document.getElementById('reasonsList');
