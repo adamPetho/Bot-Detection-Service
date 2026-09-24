@@ -1,5 +1,7 @@
+using Bot_Detection_Service.Config;
 using Bot_Detection_Service.Services;
 using BotDetection;
+using Microsoft.Extensions.Options;
 
 namespace Bot_Detection_Service
 {
@@ -8,6 +10,15 @@ namespace Bot_Detection_Service
         public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
+
+            builder.Services.AddOptions<RiskScoringOptions>()
+                .Bind(builder.Configuration.GetSection(RiskScoringOptions.SectionName))
+                .Validate(o => o.ChallengeThreshold is >= 0 and <= 1, "RiskScoring:ChallengeThreshold must be between 0 and 1.")
+                .Validate(o => o.BlockThreshold is >= 0 and <= 1, "RiskScoring:BlockThreshold must be between 0 and 1.")
+                .Validate(o => o.ChallengeThreshold <= o.BlockThreshold, "RiskScoring:ChallengeThreshold must not exceed BlockThreshold.")
+                .ValidateOnStart();
+
+            builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<RiskScoringOptions>>().Value);
             builder.Services.AddSingleton<RiskCalculator>();
 
             builder.Services.AddProblemDetails();
