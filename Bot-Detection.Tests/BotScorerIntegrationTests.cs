@@ -1,4 +1,5 @@
-﻿using Bot_Detection_Service.Services;
+﻿using Bot_Detection_Service.Config;
+using Bot_Detection_Service.Services;
 using Xunit;
 
 namespace BotDetection.Tests;
@@ -22,7 +23,7 @@ namespace BotDetection.Tests;
 /// </summary>
 public class BotScorerIntegrationTests
 {
-    private readonly RiskCalculator _scorer = new();
+    private readonly RiskCalculator _scorer = new(new RiskScoringOptions());
 
     /// <summary>
     /// The clearest possible bot case: navigator.webdriver set and no mouse

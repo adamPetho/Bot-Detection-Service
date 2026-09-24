@@ -1,9 +1,12 @@
-﻿using Bot_Detection_Service.Services;
+﻿using Bot_Detection_Service.Config;
+using Bot_Detection_Service.Services;
 
 namespace Bot_Detection.Tests
 {
     public class BotScorerActionTests
     {
+        private readonly RiskCalculator _calc = new(new RiskScoringOptions());
+
         [Theory]
         [InlineData(0.0, RiskAction.Allow)]
         [InlineData(0.15, RiskAction.Allow)]
@@ -18,7 +21,7 @@ namespace Bot_Detection.Tests
         [InlineData(1.0, RiskAction.Block)]
         public void DetermineVerdict_AtAndAroundThresholds_ReturnsExpectedBand(double score, RiskAction expected)
         {
-            var actual = RiskCalculator.DetermineAction(score);
+            var actual = _calc.DetermineAction(score);
 
             Assert.Equal(expected, actual);
         }

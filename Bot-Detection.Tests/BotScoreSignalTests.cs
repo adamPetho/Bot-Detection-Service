@@ -1,20 +1,22 @@
-﻿using Bot_Detection_Service.Services;
+﻿using Bot_Detection_Service.Config;
+using Bot_Detection_Service.Services;
 using Xunit;
 
 namespace BotDetection.Tests;
 
 /// <summary>
-/// Isolated tests for each Check* signal method on RiskCalculator. These call the
+/// Isolated tests for each Check* signal method on _calc. These call the
 /// internal static methods directly (exposed via [InternalsVisibleTo] in
 /// BotDetection/AssemblyInfo.cs) so each signal category can be verified on
 /// its own, without building a full feature vector or worrying about other
 /// signals interfering.
-///
 /// Each test starts from a running score of 0.0 and an empty reasons list,
 /// mirroring how Score() chains these calls.
 /// </summary>
 public class RiskCalculatorSignalTests
 {
+    private readonly RiskCalculator _calc = new(new RiskScoringOptions());
+
     // --- Environment --------------------------------------------------
 
     [Fact]
@@ -23,7 +25,7 @@ public class RiskCalculatorSignalTests
         var f = MakeFeatures(env: new EnvironmentFeatures { Webdriver = true, LanguagesCount = 1, HasPlugins = true });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckEnvironmentSignals(f, reasons, 0.0);
+        var score = _calc.CheckEnvironmentSignals(f, reasons, 0.0);
 
         Assert.Equal(0.5, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("webdriver", StringComparison.OrdinalIgnoreCase));
@@ -35,7 +37,7 @@ public class RiskCalculatorSignalTests
         var f = MakeFeatures(env: new EnvironmentFeatures { Webdriver = false, LanguagesCount = 0, HasPlugins = true });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckEnvironmentSignals(f, reasons, 0.0);
+        var score = _calc.CheckEnvironmentSignals(f, reasons, 0.0);
 
         Assert.Equal(0.05, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("languages", StringComparison.OrdinalIgnoreCase));
@@ -49,7 +51,7 @@ public class RiskCalculatorSignalTests
         var f = MakeFeatures(env: new EnvironmentFeatures { Webdriver = false, LanguagesCount = 1, HasPlugins = false });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckEnvironmentSignals(f, reasons, 0.0);
+        var score = _calc.CheckEnvironmentSignals(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
@@ -61,7 +63,7 @@ public class RiskCalculatorSignalTests
         var f = MakeFeatures(env: new EnvironmentFeatures { Webdriver = false, LanguagesCount = 2, HasPlugins = true });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckEnvironmentSignals(f, reasons, 0.0);
+        var score = _calc.CheckEnvironmentSignals(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
@@ -75,7 +77,7 @@ public class RiskCalculatorSignalTests
         var f = MakeFeatures(sessionDurationMs: 5_000, timeToFirstInteractionMs: null, clickCount: 1);
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckTimingSignals(f, reasons, 0.0);
+        var score = _calc.CheckTimingSignals(f, reasons, 0.0);
 
         Assert.Equal(0.2, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("no interaction", StringComparison.OrdinalIgnoreCase));
@@ -87,7 +89,7 @@ public class RiskCalculatorSignalTests
         var f = MakeFeatures(sessionDurationMs: 5_000, timeToFirstInteractionMs: 20, clickCount: 1);
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckTimingSignals(f, reasons, 0.0);
+        var score = _calc.CheckTimingSignals(f, reasons, 0.0);
 
         Assert.Equal(0.15, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("implausibly fast", StringComparison.OrdinalIgnoreCase));
@@ -99,7 +101,7 @@ public class RiskCalculatorSignalTests
         var f = MakeFeatures(sessionDurationMs: 300, timeToFirstInteractionMs: 200, clickCount: 1);
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckTimingSignals(f, reasons, 0.0);
+        var score = _calc.CheckTimingSignals(f, reasons, 0.0);
 
         Assert.Equal(0.15, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("completed in", StringComparison.OrdinalIgnoreCase));
@@ -111,7 +113,7 @@ public class RiskCalculatorSignalTests
         var f = MakeFeatures(sessionDurationMs: 20_000, timeToFirstInteractionMs: 900, clickCount: 1);
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckTimingSignals(f, reasons, 0.0);
+        var score = _calc.CheckTimingSignals(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
@@ -126,7 +128,7 @@ public class RiskCalculatorSignalTests
                              touch: new PointerFeatures { SampleCount = 0 });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckPointerActivity(f, reasons, 0.0);
+        var score = _calc.CheckPointerActivity(f, reasons, 0.0);
 
         Assert.Equal(0.2, score, precision: 3);
         Assert.Single(reasons);
@@ -148,7 +150,7 @@ public class RiskCalculatorSignalTests
             });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckPointerActivity(f, reasons, 0.0);
+        var score = _calc.CheckPointerActivity(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
@@ -170,7 +172,7 @@ public class RiskCalculatorSignalTests
             });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckPointerActivity(f, reasons, 0.0);
+        var score = _calc.CheckPointerActivity(f, reasons, 0.0);
 
         Assert.Equal(0.25, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("touch", StringComparison.OrdinalIgnoreCase));
@@ -188,7 +190,7 @@ public class RiskCalculatorSignalTests
         });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckPointerActivity(f, reasons, 0.0);
+        var score = _calc.CheckPointerActivity(f, reasons, 0.0);
 
         Assert.Equal(0.25, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("straight-line", StringComparison.OrdinalIgnoreCase));
@@ -206,7 +208,7 @@ public class RiskCalculatorSignalTests
         });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckPointerActivity(f, reasons, 0.0);
+        var score = _calc.CheckPointerActivity(f, reasons, 0.0);
 
         Assert.Equal(0.15, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("direction variance", StringComparison.OrdinalIgnoreCase));
@@ -224,7 +226,7 @@ public class RiskCalculatorSignalTests
         });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckPointerActivity(f, reasons, 0.0);
+        var score = _calc.CheckPointerActivity(f, reasons, 0.0);
 
         Assert.Equal(0.1, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("suspiciously constant", StringComparison.OrdinalIgnoreCase));
@@ -242,7 +244,7 @@ public class RiskCalculatorSignalTests
         });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckPointerActivity(f, reasons, 0.0);
+        var score = _calc.CheckPointerActivity(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
@@ -261,7 +263,7 @@ public class RiskCalculatorSignalTests
         });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckKeyboardActivity(f, reasons, 0.0);
+        var score = _calc.CheckKeyboardActivity(f, reasons, 0.0);
 
         Assert.Equal(0.15, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("dwell", StringComparison.OrdinalIgnoreCase));
@@ -278,7 +280,7 @@ public class RiskCalculatorSignalTests
         });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckKeyboardActivity(f, reasons, 0.0);
+        var score = _calc.CheckKeyboardActivity(f, reasons, 0.0);
 
         Assert.Equal(0.1, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("flight", StringComparison.OrdinalIgnoreCase));
@@ -298,7 +300,7 @@ public class RiskCalculatorSignalTests
         });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckKeyboardActivity(f, reasons, 0.0);
+        var score = _calc.CheckKeyboardActivity(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
@@ -315,7 +317,7 @@ public class RiskCalculatorSignalTests
         });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.CheckKeyboardActivity(f, reasons, 0.0);
+        var score = _calc.CheckKeyboardActivity(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
@@ -329,7 +331,7 @@ public class RiskCalculatorSignalTests
         var f = MakeFeatures(scroll: new ScrollFeatures { SampleCount = 8, DeltaCv = 0.02 });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.ScrollActivity(f, reasons, 0.0);
+        var score = _calc.ScrollActivity(f, reasons, 0.0);
 
         Assert.Equal(0.05, score, precision: 3);
         Assert.Contains(reasons, r => r.Contains("scroll", StringComparison.OrdinalIgnoreCase));
@@ -342,7 +344,7 @@ public class RiskCalculatorSignalTests
         var f = MakeFeatures(scroll: new ScrollFeatures { SampleCount = 0, DeltaCv = 0.0 });
         var reasons = new List<string>();
 
-        var score = RiskCalculator.ScrollActivity(f, reasons, 0.0);
+        var score = _calc.ScrollActivity(f, reasons, 0.0);
 
         Assert.Equal(0.0, score, precision: 3);
         Assert.Empty(reasons);
