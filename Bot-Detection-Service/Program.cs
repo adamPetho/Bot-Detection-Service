@@ -40,9 +40,21 @@ namespace Bot_Detection_Service
             app.UseCors("DevTestPage");
 #endif
 
+            var logger = app.Services
+                .GetRequiredService<ILoggerFactory>()
+                .CreateLogger("RiskDecision");
+
             app.MapPost("/api/score", (ScoreRequest req, RiskCalculator scorer) =>
             {
                 var result = scorer.Score(req.Features);
+
+                // Log 
+                var level = result.Action == RiskAction.Allow ? LogLevel.Debug : LogLevel.Information;
+                if (logger.IsEnabled(level))
+                {
+                    logger.Log(level,
+                        $"Decision {result.Action}. Score: {result.Score} for session: '{req.SessionId}' with reasons {string.Join("; ", result.Reasons)}");
+                }
 
                 return Results.Ok(new
                 {
