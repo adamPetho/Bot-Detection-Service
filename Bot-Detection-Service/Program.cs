@@ -64,7 +64,12 @@ namespace Bot_Detection_Service
                 return await next(ctx);
             });
 
-            app.UseExceptionHandler();
+            app.UseExceptionHandler(new ExceptionHandlerOptions
+            {
+                StatusCodeSelector = ex => ex is BadHttpRequestException badRequest
+                    ? badRequest.StatusCode
+                    : StatusCodes.Status500InternalServerError,
+            });
 
             // Liveness probe for the container orchestrator. Kept trivial on purpose.
             app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
