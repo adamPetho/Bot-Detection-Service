@@ -52,8 +52,8 @@ namespace Bot_Detection_Service
                 var level = result.Action == RiskAction.Allow ? LogLevel.Debug : LogLevel.Information;
                 if (logger.IsEnabled(level))
                 {
-                    logger.Log(level,
-                        $"Decision {result.Action}. Score: {result.Score} for session: '{req.SessionId}' with reasons {string.Join("; ", result.Reasons)}");
+                    logger.Log(level, "Decision {Action} score {Score:F3} session {SessionId} reasons {Reasons}",
+                                result.Action, result.Score, req.SessionId, string.Join("; ", result.Reasons));
                 }
 
                 return Results.Ok(new
