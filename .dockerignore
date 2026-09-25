@@ -1,22 +1,24 @@
-# Keep the build context small and the image focused on the service only.
 # Build artifacts
-**/bin/
-**/obj/
-
-# Everything that is NOT the scoring service:
-#  - the test project (not needed to run the service)
-#  - the throwaway manual-test pages and reference JS
-BotDetection.Tests/
-site/
-test.html
-telemetry-collector.js
-request-pattern-tracker.js
-
-# Docs / tooling / VCS
-README.md
-.git/
-.gitignore
-**/.vs/
-Dockerfile
+**/bin
+**/obj
+ 
+# Test project - not needed to build or run the service
+Bot-Detection.Tests
+ 
+# Manual-test assets - not served (no UseStaticFiles) and must not ship
+**/wwwroot
+ 
+# IDE / local dev
+**/.vs
+**/*.user
+**/Properties/launchSettings.json
+**/*.slnx
+**/*.http
+ 
+# VCS and container tooling
+.git
+**/.gitignore
+**/.gitattributes
 .dockerignore
-docker-compose.yml
+Dockerfile*
+docker-compose*.yml
